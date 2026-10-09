@@ -1,6 +1,7 @@
 #include "breakwater/board.hpp"
 
 #include "breakwater/rng.hpp"
+#include "fnv.hpp"
 
 #include <algorithm>
 #include <cassert>
@@ -15,19 +16,7 @@ constexpr int kTownFirstRow = 5;
 
 [[nodiscard]] std::size_t index_of(Coord c) {
     assert(in_bounds(c));
-    return (static_cast<std::size_t>(c.y) * static_cast<std::size_t>(kBoardSize)) + static_cast<std::size_t>(c.x);
-}
-
-void hash_bytes(std::uint64_t& hash, std::uint64_t value, int byte_count) noexcept {
-    constexpr std::uint64_t kFnvPrime = 0x100000001B3ULL;
-    for (int i = 0; i < byte_count; ++i) {
-        hash ^= (value >> (8 * i)) & 0xFFU;
-        hash *= kFnvPrime;
-    }
-}
-
-void hash_int(std::uint64_t& hash, int value) noexcept {
-    hash_bytes(hash, static_cast<std::uint64_t>(static_cast<std::uint32_t>(value)), 4);
+    return tile_index(c);
 }
 
 } // namespace
@@ -35,12 +24,12 @@ void hash_int(std::uint64_t& hash, int value) noexcept {
 Board Board::generate(std::uint64_t seed) {
     Board board;
 
-    // The beach rises inland: row 0 starts at sea level and each row climbs
-    // with jitter, so the tide eats the shore unevenly.
+    // The beach rises one level per row, with jitter, so a tide rising one
+    // level per turn eats about a row per turn, unevenly (docs/RULES.md).
     Rng terrain = make_stream(seed, Stream::Terrain);
     for (int y = 0; y < kBoardSize; ++y) {
         for (int x = 0; x < kBoardSize; ++x) {
-            const int base = y / 2;
+            const int base = y;
             const int jitter = static_cast<int>(terrain.below(2));
             board.tile_mut({x, y}).elevation = static_cast<std::uint8_t>(base + jitter);
         }
@@ -66,6 +55,8 @@ const Tile& Board::tile(Coord c) const { return tiles_.at(index_of(c)); }
 
 Tile& Board::tile_mut(Coord c) { return tiles_.at(index_of(c)); }
 
+void Board::set_tile(Coord c, Tile t) { tile_mut(c) = t; }
+
 bool Board::flooded(Coord c) const { return std::cmp_less(tile(c).elevation, tide_); }
 
 UnitId Board::add_unit(UnitKind kind, Coord c, int hp) {
@@ -78,6 +69,14 @@ UnitId Board::add_unit(UnitKind kind, Coord c, int hp) {
 }
 
 const Unit& Board::unit(UnitId id) const { return units_.at(id); }
+
+void Board::place(UnitId id, Coord to) {
+    assert(units_.at(id).alive());
+    assert(in_bounds(to));
+    assert(tile(to).building_hp == 0);
+    assert(!unit_at(to).has_value());
+    units_.at(id).pos = to;
+}
 
 std::optional<UnitId> Board::unit_at(Coord c) const {
     const auto it = std::ranges::find_if(units_, [c](const Unit& u) { return u.alive() && u.pos == c; });
@@ -121,17 +120,17 @@ PushOutcome Board::push(UnitId id, Direction dir) {
 }
 
 std::uint64_t Board::state_hash() const noexcept {
-    std::uint64_t hash = 0xCBF29CE484222325ULL;
+    std::uint64_t hash = detail::kFnvOffset;
     for (const Tile& t : tiles_) {
-        hash_bytes(hash, t.elevation, 1);
-        hash_bytes(hash, t.building_hp, 1);
+        detail::fnv_bytes(hash, t.elevation, 1);
+        detail::fnv_bytes(hash, t.building_hp, 1);
     }
-    hash_int(hash, tide_);
+    detail::fnv_int(hash, tide_);
     for (const Unit& u : units_) {
-        hash_bytes(hash, static_cast<std::uint64_t>(u.kind), 1);
-        hash_int(hash, u.pos.x);
-        hash_int(hash, u.pos.y);
-        hash_int(hash, u.hp);
+        detail::fnv_bytes(hash, static_cast<std::uint64_t>(u.kind), 1);
+        detail::fnv_int(hash, u.pos.x);
+        detail::fnv_int(hash, u.pos.y);
+        detail::fnv_int(hash, u.hp);
     }
     return hash;
 }

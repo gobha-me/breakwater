@@ -39,6 +39,11 @@ enum class Direction : std::uint8_t { North, East, South, West };
     return c.x >= 0 && c.x < kBoardSize && c.y >= 0 && c.y < kBoardSize;
 }
 
+/// Row-major tile index. Precondition: c is in bounds.
+[[nodiscard]] constexpr std::size_t tile_index(Coord c) noexcept {
+    return (static_cast<std::size_t>(c.y) * static_cast<std::size_t>(kBoardSize)) + static_cast<std::size_t>(c.x);
+}
+
 struct Tile {
     std::uint8_t elevation = 1;
     std::uint8_t building_hp = 0; ///< 0 means no building.
@@ -74,6 +79,8 @@ public:
     [[nodiscard]] static Board generate(std::uint64_t seed);
 
     [[nodiscard]] const Tile& tile(Coord c) const;
+    /// Scenario and test setup; generation never calls it.
+    void set_tile(Coord c, Tile t);
     [[nodiscard]] int tide() const noexcept { return tide_; }
     [[nodiscard]] bool flooded(Coord c) const;
     void advance_tide() noexcept { ++tide_; }
@@ -83,6 +90,11 @@ public:
     [[nodiscard]] const Unit& unit(UnitId id) const;
     [[nodiscard]] std::size_t unit_count() const noexcept { return units_.size(); }
     [[nodiscard]] std::optional<UnitId> unit_at(Coord c) const;
+
+    /// Moves a unit without resolving anything: legality is the caller's job.
+    /// Precondition: the unit is alive; `to` is in bounds, has no building and
+    /// no living unit.
+    void place(UnitId id, Coord to);
 
     /// Pushes a unit one tile. Resolves bump damage and drowning.
     PushOutcome push(UnitId id, Direction dir);
