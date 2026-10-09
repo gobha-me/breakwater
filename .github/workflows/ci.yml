@@ -130,7 +130,9 @@ jobs:
       # Most of this job is godot-cpp, which only changes with its tag. ccache
       # keys on preprocessed source and flags, so a stale restore costs a miss,
       # never a wrong object. The key changes with the compiler and with the
-      # extension's CMakeLists.txt, which pins the godot-cpp tag.
+      # extension's CMakeLists.txt, which pins the godot-cpp tag; the last
+      # restore key falls back to any cache from the same compiler, so editing
+      # that file does not send a PR back to a cold build.
       - name: Restore compiler cache
         uses: actions/cache@v6
         with:
@@ -138,6 +140,7 @@ jobs:
           key: ccache-clang${{ env.CLANG_VERSION }}-${{ hashFiles('extension/CMakeLists.txt') }}-${{ github.sha }}
           restore-keys: |
             ccache-clang${{ env.CLANG_VERSION }}-${{ hashFiles('extension/CMakeLists.txt') }}-
+            ccache-clang${{ env.CLANG_VERSION }}-
 
       - name: Configure
         run: cmake --preset dev
