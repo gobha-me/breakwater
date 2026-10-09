@@ -9,9 +9,11 @@ on:
 permissions:
   contents: read
 
+# A newer push to a PR supersedes the older run. Runs on main always finish:
+# main's compiler cache is the one every new PR restores from.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   CLANG_VERSION: "20"
