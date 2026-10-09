@@ -25,7 +25,9 @@ captures, replay hashes), never just claim completion.
 3. GCC build and tests (`gcc` preset).
 4. Clang dev build and tests, including the extension (`dev` preset).
 5. `tools/lint.sh`: clang-tidy, warnings as errors.
-6. `tools/godot_smoke.sh`: headless Godot loads the extension and checks the bridge.
+6. `tools/replay_check.sh`: every log in `tests/logs/` replays to its committed
+   `.hashes` under Clang and GCC, debug and release.
+7. `tools/godot_smoke.sh`: headless Godot loads the extension and checks the bridge.
 
 Suppressions: a disabled check in `.clang-tidy` carries its reason there; an
 inline suppression names the exact check, with the reason on the line above
@@ -37,8 +39,13 @@ inline suppression names the exact check, with the reason on the line above
   (`core/include/breakwater/rng.hpp`). Stream ids are save/replay format: append,
   never renumber. No `std::` distributions, no unordered iteration feeding the
   state, no floating point in rules.
-- **State hash.** New state must be folded into `Board::state_hash()`. The test
-  "state hash tracks every mutation" is the pattern to follow.
+- **State hash.** New state must be folded into `Board::state_hash()` or
+  `Mission::state_hash()`. The tests "state hash tracks every mutation" and
+  "mission hash covers seed, turn and action states, not events" are the
+  pattern to follow.
+- **Replay logs.** `tests/logs/*.log` with `.hashes` beside them are goldens. A
+  rule change that moves a hash is re-recorded with
+  `build/dev/tools/replay/bw_replay <log> > <log>.hashes`, and the PR says why.
 - Test edge cases (bounds, dead units, blocked pushes) before visuals.
 - Pin dependency versions to releases at least two weeks old.
 
@@ -79,7 +86,7 @@ at a checkpoint named in `docs/ROADMAP.md`.
 6. **Next issue.** No idling between issues.
 
 CI runs the gates that need no display: format, ASan and UBSan, GCC, Clang,
-clang-tidy. The Godot smoke test and captures need a Godot binary and a display,
+clang-tidy, replay determinism. The Godot smoke test and captures need a Godot binary and a display,
 so they stay local and their output belongs in the PR body.
 
 A decision that comes up mid-issue gets made and recorded in the issue, not

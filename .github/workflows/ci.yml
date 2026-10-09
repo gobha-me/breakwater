@@ -85,6 +85,27 @@ jobs:
       - name: Test
         run: ctest --preset gcc
 
+  replay:
+    name: replay determinism
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Clang, GCC and Ninja
+        run: |
+          wget -qO /tmp/llvm.sh https://apt.llvm.org/llvm.sh
+          chmod +x /tmp/llvm.sh
+          sudo /tmp/llvm.sh "$CLANG_VERSION"
+          sudo apt-get install -y "g++-$GCC_VERSION" ninja-build
+          sudo ln -sf "/usr/bin/clang++-$CLANG_VERSION" /usr/local/bin/clang++
+          sudo ln -sf "/usr/bin/g++-$GCC_VERSION" /usr/local/bin/g++
+
+      # Builds only bw_replay in each preset, so godot-cpp is fetched by the
+      # Clang presets but never compiled here.
+      - name: Replay every committed log under Clang and GCC, debug and release
+        run: tools/replay_check.sh
+
   clang:
     name: clang, extension and clang-tidy
     runs-on: ubuntu-24.04

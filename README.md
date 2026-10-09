@@ -23,10 +23,17 @@ ctest --preset dev
 godot --path game
 ```
 
+## Replays
+
+A mission is a seed plus a command log (`tests/logs/*.log`).
+`build/dev/tools/replay/bw_replay <log>` prints the state hash after setup and
+after every turn; the same log prints the same hashes on every compiler and
+build type.
+
 ## Quality gates
 
 ```sh
-tools/check.sh   # format, ASan+UBSan, GCC, clang, clang-tidy, Godot smoke
+tools/check.sh   # format, ASan+UBSan, GCC, clang, clang-tidy, replay, Godot smoke
 ```
 
 ## License
