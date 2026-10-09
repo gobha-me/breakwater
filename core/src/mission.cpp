@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cassert>
 #include <cstddef>
 #include <cstdlib>
 #include <limits>
@@ -143,6 +144,8 @@ using Distances = std::array<int, kTileCount>;
 Mission::Mission(std::uint64_t seed, Board board, Setup setup)
     : board_{std::move(board)}, seed_{seed}, actions_(board_.unit_count(), ActionState::Ready),
       intents_{std::move(setup.intents)}, spawns_{setup.spawns} {
+    assert(setup.turn >= 1 && setup.turn <= kTurnCount);
+    turn_ = setup.turn;
     intents_.resize(board_.unit_count());
     for (UnitId id = 0; id < board_.unit_count(); ++id) {
         has_engineers_ = has_engineers_ || board_.unit(id).kind == UnitKind::Engineer;
