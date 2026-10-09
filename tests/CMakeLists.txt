@@ -9,7 +9,7 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(Catch2)
 
-add_executable(breakwater_tests test_rng.cpp test_board.cpp test_mission.cpp test_intents.cpp)
+add_executable(breakwater_tests test_rng.cpp test_board.cpp test_mission.cpp test_intents.cpp test_turn.cpp)
 target_link_libraries(breakwater_tests PRIVATE breakwater::core breakwater_warnings Catch2::Catch2WithMain)
 
 list(APPEND CMAKE_MODULE_PATH ${catch2_SOURCE_DIR}/extras)

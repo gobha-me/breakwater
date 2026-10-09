@@ -3,7 +3,9 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <algorithm>
+#include <cstddef>
 #include <cstdint>
+#include <utility>
 #include <vector>
 
 using breakwater::Board;
@@ -22,17 +24,26 @@ using breakwater::UnitKind;
 
 namespace {
 
-/// Dry everywhere: elevation 1 at tide 1. Scenarios add water and buildings.
+/// High, dry ground everywhere: elevation 8 at tide 1, so no tide within a
+/// test reaches it. Scenarios add water and buildings.
 Board flat_board() {
     Board board;
+    for (std::size_t i = 0; i < breakwater::kTileCount; ++i) {
+        board.set_tile(breakwater::tile_coord(i), Tile{.elevation = 8});
+    }
     board.advance_tide();
     return board;
+}
+
+/// A hand-built mission with no spawns, so nothing arrives uninvited.
+Mission scenario(const Board& board, std::vector<Intent> intents = {}) {
+    return Mission::from_board(1, board, {.intents = std::move(intents), .spawns = {}});
 }
 
 void add_water(Board& board, Coord c) { board.set_tile(c, Tile{.elevation = 0}); }
 
 void add_building(Board& board, Coord c, std::uint8_t hp = 2) {
-    board.set_tile(c, Tile{.elevation = 1, .building_hp = hp});
+    board.set_tile(c, Tile{.elevation = 8, .building_hp = hp});
 }
 
 std::vector<Event> end_turn(Mission& mission) {
@@ -55,7 +66,7 @@ TEST_CASE("crawler intent follows the ranking key in docs/RULES.md", "[intent][p
         const auto c = board.add_unit(UnitKind::Crawler, {3, 3}, 2);
         (void)board.add_unit(UnitKind::Engineer, {3, 4}, 2);
         add_building(board, {6, 6});
-        Mission mission = Mission::from_board(1, board);
+        Mission mission = scenario(board);
         const auto events = end_turn(mission);
         CHECK(mission.board().unit(c).pos == Coord{3, 3});
         CHECK(mission.intent(c) == Intent{Direction::South});
@@ -73,7 +84,7 @@ TEST_CASE("crawler intent follows the ranking key in docs/RULES.md", "[intent][p
         const auto c = board.add_unit(UnitKind::Crawler, {0, 0}, 2);
         add_building(board, {1, 0});
         (void)board.add_unit(UnitKind::Engineer, {0, 3}, 2);
-        Mission mission = Mission::from_board(1, board);
+        Mission mission = scenario(board);
         (void)end_turn(mission);
         CHECK(mission.board().unit(c).pos == Coord{0, 2});
         CHECK(mission.intent(c) == Intent{Direction::South});
@@ -85,7 +96,7 @@ TEST_CASE("crawler intent follows the ranking key in docs/RULES.md", "[intent][p
         add_building(board, {2, 1});
         add_building(board, {0, 6});
         (void)board.add_unit(UnitKind::Engineer, {7, 7}, 2);
-        Mission mission = Mission::from_board(1, board);
+        Mission mission = scenario(board);
         (void)end_turn(mission);
         // (2,0) striking South and (1,1) striking East are both two steps; row 0 wins.
         CHECK(mission.board().unit(c).pos == Coord{2, 0});
@@ -97,7 +108,7 @@ TEST_CASE("crawler intent follows the ranking key in docs/RULES.md", "[intent][p
         const auto c = board.add_unit(UnitKind::Crawler, {3, 1}, 2);
         (void)board.add_unit(UnitKind::Engineer, {1, 1}, 2);
         (void)board.add_unit(UnitKind::Engineer, {5, 1}, 2);
-        Mission mission = Mission::from_board(1, board);
+        Mission mission = scenario(board);
         (void)end_turn(mission);
         CHECK(mission.board().unit(c).pos == Coord{2, 1});
         CHECK(mission.intent(c) == Intent{Direction::West});
@@ -108,7 +119,7 @@ TEST_CASE("crawler intent follows the ranking key in docs/RULES.md", "[intent][p
         const auto c = board.add_unit(UnitKind::Crawler, {3, 3}, 2);
         (void)board.add_unit(UnitKind::Engineer, {4, 3}, 2);
         (void)board.add_unit(UnitKind::Engineer, {3, 2}, 2);
-        Mission mission = Mission::from_board(1, board);
+        Mission mission = scenario(board);
         (void)end_turn(mission);
         CHECK(mission.board().unit(c).pos == Coord{3, 3});
         CHECK(mission.intent(c) == Intent{Direction::North});
@@ -119,7 +130,7 @@ TEST_CASE("crawler intent follows the ranking key in docs/RULES.md", "[intent][p
         const auto c = board.add_unit(UnitKind::Crawler, {0, 0}, 2);
         add_building(board, {0, 7});
         (void)board.add_unit(UnitKind::Engineer, {7, 0}, 2);
-        Mission mission = Mission::from_board(1, board);
+        Mission mission = scenario(board);
         const auto events = end_turn(mission);
         CHECK(mission.board().unit(c).pos == Coord{0, 2});
         CHECK_FALSE(mission.intent(c).has_value());
@@ -132,7 +143,7 @@ TEST_CASE("crawler intent follows the ranking key in docs/RULES.md", "[intent][p
         Board board = flat_board();
         const auto c = board.add_unit(UnitKind::Crawler, {0, 0}, 2);
         (void)board.add_unit(UnitKind::Engineer, {7, 7}, 2);
-        Mission mission = Mission::from_board(1, board);
+        Mission mission = scenario(board);
         const auto events = end_turn(mission);
         CHECK(mission.board().unit(c).pos == Coord{0, 0});
         CHECK_FALSE(mission.intent(c).has_value());
@@ -144,7 +155,7 @@ TEST_CASE("crawler intent follows the ranking key in docs/RULES.md", "[intent][p
         const auto first = board.add_unit(UnitKind::Crawler, {3, 1}, 2);
         const auto second = board.add_unit(UnitKind::Crawler, {2, 1}, 2);
         (void)board.add_unit(UnitKind::Engineer, {3, 3}, 2);
-        Mission mission = Mission::from_board(1, board);
+        Mission mission = scenario(board);
         (void)end_turn(mission);
         CHECK(mission.board().unit(first).pos == Coord{3, 2});
         CHECK(mission.intent(first) == Intent{Direction::South});
@@ -159,7 +170,7 @@ TEST_CASE("crawler intent follows the ranking key in docs/RULES.md", "[intent][p
         add_water(board, {3, 1});
         add_building(board, {4, 1}, 2);
         (void)board.add_unit(UnitKind::Engineer, {3, 3}, 2);
-        Mission mission = Mission::from_board(1, board);
+        Mission mission = scenario(board);
         (void)end_turn(mission);
         CHECK(mission.board().unit(c).pos == Coord{3, 2}); // Through the water at (3,1).
         CHECK(mission.intent(c) == Intent{Direction::South});
@@ -171,7 +182,7 @@ TEST_CASE("intents are published before the player acts and hold through it", "[
     const auto c = board.add_unit(UnitKind::Crawler, {3, 2}, 2);
     const auto e = board.add_unit(UnitKind::Engineer, {3, 4}, 2);
     add_building(board, {7, 7});
-    Mission mission = Mission::from_board(1, board);
+    Mission mission = scenario(board);
     (void)end_turn(mission);
     REQUIRE(mission.board().unit(c).pos == Coord{3, 3});
     REQUIRE(mission.intent(c) == Intent{Direction::South});
@@ -193,7 +204,7 @@ TEST_CASE("attacks resolve against whatever is there now", "[intent][resolve]") 
         Board board = flat_board();
         const auto c = board.add_unit(UnitKind::Crawler, {3, 3}, 2);
         const auto e = board.add_unit(UnitKind::Engineer, {3, 4}, 2);
-        Mission mission = Mission::from_board(1, board, {Intent{Direction::South}});
+        Mission mission = scenario(board, {Intent{Direction::South}});
         const auto events = end_turn(mission);
         CHECK(mission.board().unit(e).hp == 1);
         CHECK(
@@ -207,7 +218,7 @@ TEST_CASE("attacks resolve against whatever is there now", "[intent][resolve]") 
         const auto c1 = board.add_unit(UnitKind::Crawler, {3, 3}, 2);
         const auto c2 = board.add_unit(UnitKind::Crawler, {4, 4}, 2);
         const auto e = board.add_unit(UnitKind::Engineer, {2, 3}, 2);
-        Mission mission = Mission::from_board(1, board, {Intent{Direction::South}});
+        Mission mission = scenario(board, {Intent{Direction::South}});
         REQUIRE(mission.apply(ShoveCommand{.engineer = e, .dir = Direction::East}));
         REQUIRE(mission.board().unit(c1).pos == Coord{4, 3});
         (void)end_turn(mission);
@@ -219,7 +230,7 @@ TEST_CASE("attacks resolve against whatever is there now", "[intent][resolve]") 
         (void)board.add_unit(UnitKind::Crawler, {3, 3}, 2);
         (void)board.add_unit(UnitKind::Crawler, {2, 4}, 2);
         add_building(board, {3, 4}, 1);
-        Mission mission = Mission::from_board(1, board, {Intent{Direction::South}, Intent{Direction::East}});
+        Mission mission = scenario(board, {Intent{Direction::South}, Intent{Direction::East}});
         const auto events = end_turn(mission);
         CHECK(mission.board().tile({3, 4}).building_hp == 0);
         CHECK(of_kind(events, EventKind::BuildingDamaged).size() == 1);
@@ -230,7 +241,7 @@ TEST_CASE("attacks resolve against whatever is there now", "[intent][resolve]") 
         Board board = flat_board();
         const auto c = board.add_unit(UnitKind::Crawler, {1, 3}, 2);
         const auto e = board.add_unit(UnitKind::Engineer, {2, 3}, 2);
-        Mission mission = Mission::from_board(1, board, {Intent{Direction::West}});
+        Mission mission = scenario(board, {Intent{Direction::West}});
         REQUIRE(mission.apply(ShoveCommand{.engineer = e, .dir = Direction::West}));
         const auto events = end_turn(mission);
         CHECK(of_kind(events, EventKind::AttackResolved) ==
@@ -245,7 +256,7 @@ TEST_CASE("stale intents degrade to stated fallbacks", "[intent][stale]") {
         Board board = flat_board();
         const auto c = board.add_unit(UnitKind::Crawler, {3, 0}, 1);
         const auto e = board.add_unit(UnitKind::Engineer, {3, 1}, 2);
-        Mission mission = Mission::from_board(1, board, {Intent{Direction::South}});
+        Mission mission = scenario(board, {Intent{Direction::South}});
         REQUIRE(mission.apply(ShoveCommand{.engineer = e, .dir = Direction::North}));
         REQUIRE_FALSE(mission.board().unit(c).alive());
         CHECK_FALSE(mission.intent(c).has_value());
@@ -259,7 +270,7 @@ TEST_CASE("stale intents degrade to stated fallbacks", "[intent][stale]") {
         const auto c0 = board.add_unit(UnitKind::Crawler, {3, 3}, 2);
         const auto c1 = board.add_unit(UnitKind::Crawler, {4, 3}, 1);
         const auto e = board.add_unit(UnitKind::Engineer, {4, 4}, 2);
-        Mission mission = Mission::from_board(1, board, {Intent{Direction::East}, Intent{Direction::South}});
+        Mission mission = scenario(board, {Intent{Direction::East}, Intent{Direction::South}});
         const auto events = end_turn(mission);
         CHECK_FALSE(mission.board().unit(c1).alive());
         CHECK(mission.board().unit(e).hp == 2);
@@ -276,7 +287,7 @@ TEST_CASE("stale intents degrade to stated fallbacks", "[intent][stale]") {
         const auto target = board.add_unit(UnitKind::Engineer, {3, 4}, 2);
         const auto pusher = board.add_unit(UnitKind::Engineer, {2, 4}, 2);
         add_water(board, {4, 4});
-        Mission mission = Mission::from_board(1, board, {Intent{Direction::South}});
+        Mission mission = scenario(board, {Intent{Direction::South}});
         REQUIRE(mission.apply(ShoveCommand{.engineer = pusher, .dir = Direction::East}));
         REQUIRE_FALSE(mission.board().unit(target).alive());
         const auto events = end_turn(mission);
@@ -317,9 +328,9 @@ TEST_CASE("intent planning is deterministic", "[intent][determinism]") {
 TEST_CASE("intents are part of the state hash; a dead crawler's are not", "[intent][determinism]") {
     Board board = flat_board();
     (void)board.add_unit(UnitKind::Crawler, {3, 3}, 2);
-    const auto none = Mission::from_board(1, board).state_hash();
-    const auto south = Mission::from_board(1, board, {Intent{Direction::South}}).state_hash();
-    const auto north = Mission::from_board(1, board, {Intent{Direction::North}}).state_hash();
+    const auto none = scenario(board).state_hash();
+    const auto south = scenario(board, {Intent{Direction::South}}).state_hash();
+    const auto north = scenario(board, {Intent{Direction::North}}).state_hash();
     CHECK(none != south);
     CHECK(south != north);
     CHECK(none != north);
@@ -327,6 +338,5 @@ TEST_CASE("intents are part of the state hash; a dead crawler's are not", "[inte
     Board dead = flat_board();
     const auto c = dead.add_unit(UnitKind::Crawler, {3, 0}, 1);
     dead.damage_unit(c, 1);
-    CHECK(Mission::from_board(1, dead).state_hash() ==
-          Mission::from_board(1, dead, {Intent{Direction::South}}).state_hash());
+    CHECK(scenario(dead).state_hash() == scenario(dead, {Intent{Direction::South}}).state_hash());
 }

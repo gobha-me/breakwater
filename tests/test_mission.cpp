@@ -3,8 +3,10 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <algorithm>
+#include <cstddef>
 #include <cstdint>
 #include <set>
+#include <utility>
 #include <vector>
 
 using breakwater::ActionState;
@@ -14,6 +16,7 @@ using breakwater::Direction;
 using breakwater::EndTurnCommand;
 using breakwater::Event;
 using breakwater::EventKind;
+using breakwater::Intent;
 using breakwater::kBoardSize;
 using breakwater::Mission;
 using breakwater::MoveCommand;
@@ -25,17 +28,26 @@ using breakwater::UnitKind;
 
 namespace {
 
-/// Dry everywhere: elevation 1 at tide 1. Scenarios add water and buildings.
+/// High, dry ground everywhere: elevation 8 at tide 1, so no tide within a
+/// test reaches it. Scenarios add water and buildings.
 Board flat_board() {
     Board board;
+    for (std::size_t i = 0; i < breakwater::kTileCount; ++i) {
+        board.set_tile(breakwater::tile_coord(i), Tile{.elevation = 8});
+    }
     board.advance_tide();
     return board;
+}
+
+/// A hand-built mission with no spawns, so nothing arrives uninvited.
+Mission scenario(const Board& board, std::vector<Intent> intents = {}) {
+    return Mission::from_board(1, board, {.intents = std::move(intents), .spawns = {}});
 }
 
 void add_water(Board& board, Coord c) { board.set_tile(c, Tile{.elevation = 0}); }
 
 void add_building(Board& board, Coord c, std::uint8_t hp) {
-    board.set_tile(c, Tile{.elevation = 1, .building_hp = hp});
+    board.set_tile(c, Tile{.elevation = 8, .building_hp = hp});
 }
 
 /// Applies a command that must be refused, and checks the refusal changed
@@ -62,12 +74,12 @@ TEST_CASE("deployment puts three engineers on dry ground in row 4", "[mission][d
     for (std::uint64_t seed = 0; seed < 200; ++seed) {
         const Mission mission = Mission::generate(seed);
         const Board& board = mission.board();
-        REQUIRE(board.unit_count() == breakwater::kEngineerCount);
+        REQUIRE(board.unit_count() == breakwater::kEngineerCount + breakwater::kSpawnTable.front());
         REQUIRE(board.tide() == breakwater::kStartTide);
         REQUIRE(mission.turn() == 1);
 
         std::set<int> columns;
-        for (UnitId id = 0; id < board.unit_count(); ++id) {
+        for (UnitId id = 0; id < breakwater::kEngineerCount; ++id) {
             const auto& u = board.unit(id);
             REQUIRE(u.kind == UnitKind::Engineer);
             REQUIRE(u.hp == breakwater::kUnitHp);
@@ -85,14 +97,14 @@ TEST_CASE("engineers reach dry, empty tiles within two steps", "[mission][move]"
     SECTION("open ground: every tile within two steps") {
         Board board = flat_board();
         const auto e = board.add_unit(UnitKind::Engineer, {3, 3}, 2);
-        const Mission mission = Mission::from_board(1, board);
+        const Mission mission = scenario(board);
         CHECK(mission.reachable(e).size() == 12);
     }
 
     SECTION("a corner limits the reach to what is on the board") {
         Board board = flat_board();
         const auto e = board.add_unit(UnitKind::Engineer, {0, 0}, 2);
-        const Mission mission = Mission::from_board(1, board);
+        const Mission mission = scenario(board);
         CHECK(mission.reachable(e) == std::vector<Coord>{{1, 0}, {2, 0}, {0, 1}, {1, 1}, {0, 2}});
     }
 
@@ -102,14 +114,14 @@ TEST_CASE("engineers reach dry, empty tiles within two steps", "[mission][move]"
         add_water(board, {3, 2});
         add_building(board, {4, 3}, 2);
         (void)board.add_unit(UnitKind::Crawler, {2, 3}, 2);
-        const Mission mission = Mission::from_board(1, board);
+        const Mission mission = scenario(board);
         CHECK(mission.reachable(e) == std::vector<Coord>{{2, 4}, {3, 4}, {4, 4}, {3, 5}});
     }
 
     SECTION("a crawler has no engineer moves") {
         Board board = flat_board();
         const auto c = board.add_unit(UnitKind::Crawler, {3, 3}, 2);
-        const Mission mission = Mission::from_board(1, board);
+        const Mission mission = scenario(board);
         CHECK(mission.reachable(c).empty());
         CHECK(mission.reachable(99).empty());
     }
@@ -119,7 +131,7 @@ TEST_CASE("an engineer moves, then may shove, then is done", "[mission][move][sh
     Board board = flat_board();
     const auto e = board.add_unit(UnitKind::Engineer, {3, 3}, 2);
     const auto c = board.add_unit(UnitKind::Crawler, {3, 1}, 2);
-    Mission mission = Mission::from_board(1, board);
+    Mission mission = scenario(board);
 
     REQUIRE(mission.apply(MoveCommand{.engineer = e, .to = {3, 2}}));
     CHECK(mission.board().unit(e).pos == Coord{3, 2});
@@ -146,7 +158,7 @@ TEST_CASE("a shove resolves through Board::push and reports each effect", "[miss
     SECTION("into the board edge: damage, no movement") {
         board.place(e, {3, 1});
         const auto c = board.add_unit(UnitKind::Crawler, {3, 0}, 2);
-        Mission mission = Mission::from_board(1, board);
+        Mission mission = scenario(board);
         REQUIRE(mission.apply(ShoveCommand{.engineer = e, .dir = Direction::North}));
         CHECK(mission.board().unit(c).hp == 1);
         CHECK(mission.take_events() ==
@@ -159,7 +171,7 @@ TEST_CASE("a shove resolves through Board::push and reports each effect", "[miss
     SECTION("a bump that kills reports the death") {
         board.place(e, {3, 1});
         const auto c = board.add_unit(UnitKind::Crawler, {3, 0}, 1);
-        Mission mission = Mission::from_board(1, board);
+        Mission mission = scenario(board);
         REQUIRE(mission.apply(ShoveCommand{.engineer = e, .dir = Direction::North}));
         CHECK_FALSE(mission.board().unit(c).alive());
         const auto events = mission.take_events();
@@ -171,7 +183,7 @@ TEST_CASE("a shove resolves through Board::push and reports each effect", "[miss
     SECTION("into another unit: both take damage, victim first") {
         const auto victim = board.add_unit(UnitKind::Crawler, {3, 1}, 2);
         const auto blocker = board.add_unit(UnitKind::Crawler, {3, 0}, 2);
-        Mission mission = Mission::from_board(1, board);
+        Mission mission = scenario(board);
         REQUIRE(mission.apply(ShoveCommand{.engineer = e, .dir = Direction::North}));
         CHECK(mission.take_events() ==
               std::vector<Event>{
@@ -184,7 +196,7 @@ TEST_CASE("a shove resolves through Board::push and reports each effect", "[miss
     SECTION("into a building: the unit and the building take damage") {
         const auto c = board.add_unit(UnitKind::Crawler, {3, 1}, 2);
         add_building(board, {3, 0}, 2);
-        Mission mission = Mission::from_board(1, board);
+        Mission mission = scenario(board);
         REQUIRE(mission.apply(ShoveCommand{.engineer = e, .dir = Direction::North}));
         CHECK(mission.board().tile({3, 0}).building_hp == 1);
         CHECK(mission.take_events() ==
@@ -198,7 +210,7 @@ TEST_CASE("a shove resolves through Board::push and reports each effect", "[miss
     SECTION("an engineer shoved into water drowns, and can no longer act") {
         const auto other = board.add_unit(UnitKind::Engineer, {3, 1}, 2);
         add_water(board, {3, 0});
-        Mission mission = Mission::from_board(1, board);
+        Mission mission = scenario(board);
         REQUIRE(mission.apply(ShoveCommand{.engineer = e, .dir = Direction::North}));
         CHECK_FALSE(mission.board().unit(other).alive());
         CHECK(mission.take_events() ==
@@ -218,7 +230,7 @@ TEST_CASE("refused commands change nothing and say why", "[mission][rejection]")
     add_water(board, {1, 3});
     add_building(board, {0, 2}, 2);
     (void)board.add_unit(UnitKind::Engineer, {0, 4}, 2);
-    Mission mission = Mission::from_board(1, board);
+    Mission mission = scenario(board);
 
     SECTION("no such unit, or not an engineer") {
         require_refused(mission, MoveCommand{.engineer = 99, .to = {0, 5}}, Rejection::NotAnEngineer);
@@ -253,7 +265,7 @@ TEST_CASE("ending the turn starts the next one with fresh actions", "[mission][t
     Board board = flat_board();
     const auto e = board.add_unit(UnitKind::Engineer, {3, 3}, 2);
     (void)board.add_unit(UnitKind::Crawler, {3, 1}, 2);
-    Mission mission = Mission::from_board(1, board);
+    Mission mission = scenario(board);
     REQUIRE(mission.apply(MoveCommand{.engineer = e, .to = {3, 2}}));
     REQUIRE(mission.apply(ShoveCommand{.engineer = e, .dir = Direction::North}));
     (void)mission.take_events();
@@ -276,24 +288,24 @@ TEST_CASE("mission hash covers seed, turn and action states, not events", "[miss
     }
 
     SECTION("the same board with a spent move is a different position") {
-        Mission moved = Mission::from_board(1, board);
+        Mission moved = scenario(board);
         REQUIRE(moved.apply(MoveCommand{.engineer = e, .to = {3, 4}}));
         Board there = board;
         there.place(e, {3, 4});
-        const Mission placed = Mission::from_board(1, there);
+        const Mission placed = scenario(there);
         REQUIRE(moved.board().state_hash() == placed.board().state_hash());
         CHECK(moved.state_hash() != placed.state_hash());
     }
 
     SECTION("the turn counter") {
-        Mission mission = Mission::from_board(1, board);
+        Mission mission = scenario(board);
         const auto before = mission.state_hash();
         REQUIRE(mission.apply(EndTurnCommand{}));
         CHECK(mission.state_hash() != before);
     }
 
     SECTION("draining events is observation, not a state change") {
-        Mission mission = Mission::from_board(1, board);
+        Mission mission = scenario(board);
         REQUIRE(mission.apply(MoveCommand{.engineer = e, .to = {3, 4}}));
         const auto before = mission.state_hash();
         CHECK_FALSE(mission.take_events().empty());
