@@ -3,3 +3,4 @@
 /captures/
 /game/.godot/
 /game/bin/*.so
+/.ccache/
