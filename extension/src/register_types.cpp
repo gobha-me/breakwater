@@ -1,4 +1,3 @@
-#include "breakwater_board.hpp"
 #include "breakwater_mission.hpp"
 
 #include <gdextension_interface.h>
@@ -12,7 +11,6 @@ void initialize_breakwater(godot::ModuleInitializationLevel level) {
     if (level != godot::MODULE_INITIALIZATION_LEVEL_SCENE) {
         return;
     }
-    GDREGISTER_CLASS(breakwater::gd::BreakwaterBoard);
     GDREGISTER_CLASS(breakwater::gd::BreakwaterMission);
 }
 

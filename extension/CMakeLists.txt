@@ -17,7 +17,7 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(godot-cpp)
 
-add_library(breakwater_extension SHARED src/register_types.cpp src/breakwater_board.cpp src/breakwater_mission.cpp)
+add_library(breakwater_extension SHARED src/register_types.cpp src/breakwater_mission.cpp)
 target_link_libraries(breakwater_extension PRIVATE breakwater::core breakwater_warnings godot-cpp)
 
 get_target_property(GODOTCPP_SUFFIX godot-cpp GODOTCPP_SUFFIX)
