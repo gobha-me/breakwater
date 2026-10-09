@@ -4,7 +4,7 @@ extends Node3D
 
 const TILE := 1.0
 const BASE_HEIGHT := 0.2
-const STEP_HEIGHT := 0.25
+const STEP_HEIGHT := 0.15  # Elevation runs 0-8 (docs/RULES.md): keep the beach low.
 
 @export var board_seed := 42
 @export var tide_steps := 1
@@ -81,8 +81,9 @@ func _build_environment() -> void:
 
 
 func _tile_color(elevation: int) -> Color:
-	var palette := [Color(0.85, 0.78, 0.55), Color(0.75, 0.72, 0.5), Color(0.45, 0.62, 0.35),
-			Color(0.38, 0.55, 0.3), Color(0.5, 0.5, 0.45)]
+	var palette := [Color(0.85, 0.78, 0.55), Color(0.82, 0.76, 0.54), Color(0.75, 0.72, 0.5),
+			Color(0.6, 0.66, 0.42), Color(0.45, 0.62, 0.35), Color(0.4, 0.58, 0.32),
+			Color(0.38, 0.55, 0.3), Color(0.45, 0.5, 0.4), Color(0.5, 0.5, 0.45)]
 	return palette[clampi(elevation, 0, palette.size() - 1)]
 
 

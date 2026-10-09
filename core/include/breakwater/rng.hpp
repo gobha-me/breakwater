@@ -50,6 +50,8 @@ private:
 enum class Stream : std::uint8_t {
     Terrain = 1,
     Buildings = 2,
+    Deploy = 3,
+    Spawns = 4,
 };
 
 [[nodiscard]] constexpr Rng make_stream(std::uint64_t seed, Stream stream) noexcept {

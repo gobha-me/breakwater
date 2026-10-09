@@ -46,9 +46,33 @@ TEST_CASE("generated boards have a town and a rising shore", "[board]") {
     for (std::uint64_t seed = 0; seed < 200; ++seed) {
         const Board board = Board::generate(seed);
         REQUIRE(building_count(board) == 3);
+        for (int y = 0; y < kBoardSize; ++y) {
+            for (int x = 0; x < kBoardSize; ++x) {
+                const int elevation = board.tile({x, y}).elevation;
+                REQUIRE((elevation == y || elevation == y + 1));
+                REQUIRE((board.tile({x, y}).building_hp == 0 || y >= 5));
+            }
+        }
+    }
+}
+
+TEST_CASE("the tide eats the shore and spares the high town", "[board][tide]") {
+    // docs/RULES.md: the tide is 1 at the start and 6 after the last turn.
+    for (std::uint64_t seed = 0; seed < 200; ++seed) {
+        Board board = Board::generate(seed);
+        board.advance_tide();
         for (int x = 0; x < kBoardSize; ++x) {
-            REQUIRE(board.tile({x, 0}).elevation <= 1);
-            REQUIRE(board.tile({x, 0}).building_hp == 0);
+            REQUIRE_FALSE(board.flooded({x, 4})); // The deploy row starts dry.
+        }
+        for (int i = 1; i < 6; ++i) {
+            board.advance_tide();
+        }
+        for (int x = 0; x < kBoardSize; ++x) {
+            for (int y = 0; y <= 4; ++y) {
+                REQUIRE(board.flooded({x, y}));
+            }
+            REQUIRE_FALSE(board.flooded({x, 6}));
+            REQUIRE_FALSE(board.flooded({x, 7}));
         }
     }
 }
@@ -125,7 +149,7 @@ TEST_CASE("push into a building damages unit and building", "[board][push]") {
 TEST_CASE("engineers drown in flooded tiles; crawlers swim", "[board][push][tide]") {
     Board board = Board::generate(3);
     for (int i = 0; i < 10; ++i) {
-        board.advance_tide(); // Floods the whole board: max elevation is 4.
+        board.advance_tide(); // Floods the whole board: max elevation is 8.
     }
     REQUIRE(board.flooded({2, 2}));
 
