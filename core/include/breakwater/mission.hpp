@@ -4,6 +4,7 @@
 
 #include <cstdint>
 #include <expected>
+#include <optional>
 #include <string_view>
 #include <variant>
 #include <vector>
@@ -14,6 +15,8 @@ namespace breakwater {
 inline constexpr int kEngineerCount = 3;
 inline constexpr int kUnitHp = 2;
 inline constexpr int kEngineerMoveRange = 2;
+inline constexpr int kCrawlerMoveRange = 2;
+inline constexpr int kAttackDamage = 1;
 inline constexpr int kDeployRow = 4;
 inline constexpr int kStartTide = 1;
 
@@ -24,6 +27,11 @@ enum class ActionState : std::uint8_t {
     Moved, ///< May still shove.
     Done,  ///< Shoved; nothing left this turn.
 };
+
+/// A crawler's telegraphed attack: the direction it will strike next enemy
+/// phase, from wherever it stands then. Empty means no attack. A direction, not
+/// a target, so shoving a crawler retargets it (docs/RULES.md).
+using Intent = std::optional<Direction>;
 
 struct MoveCommand {
     UnitId engineer = 0;
@@ -77,6 +85,8 @@ enum class EventKind : std::uint8_t {
     UnitDrowned,     ///< `unit` drowned at `to`.
     BuildingDamaged, ///< The building at `to` has `value` HP left.
     TurnStarted,     ///< Turn `value` begins.
+    IntentDeclared,  ///< Crawler `unit` at `from` will strike `to`; `value` is the Direction.
+    AttackResolved,  ///< Crawler `unit` at `from` struck `to`, whatever was there.
 };
 
 struct Event {
@@ -102,7 +112,9 @@ public:
 
     /// A mission over a hand-built board, for scenarios and tests. Every unit
     /// starts Ready on turn 1. `seed` drives the mission's later draws.
-    [[nodiscard]] static Mission from_board(std::uint64_t seed, Board board);
+    /// `intents`, indexed by UnitId, presets what crawlers have telegraphed;
+    /// missing entries mean no attack.
+    [[nodiscard]] static Mission from_board(std::uint64_t seed, Board board, std::vector<Intent> intents = {});
 
     [[nodiscard]] const Board& board() const noexcept { return board_; }
     [[nodiscard]] std::uint64_t seed() const noexcept { return seed_; }
@@ -110,6 +122,9 @@ public:
     [[nodiscard]] int turn() const noexcept { return turn_; }
     /// Precondition: `id` names a unit.
     [[nodiscard]] ActionState action_state(UnitId id) const;
+    /// What crawler `id` will strike next enemy phase. Empty for engineers, the
+    /// dead, and crawlers with no target. Precondition: `id` names a unit.
+    [[nodiscard]] Intent intent(UnitId id) const;
 
     /// Tiles the engineer may move to this turn, row-major. Empty when the
     /// engineer may not move: not an engineer, dead, or already acted.
@@ -122,22 +137,27 @@ public:
     [[nodiscard]] std::vector<Event> take_events();
 
     /// FNV-1a over everything that decides the future: the board, the seed
-    /// (later draws derive from it), the turn and the action states.
+    /// (later draws derive from it), the turn, the action states and the
+    /// intents.
     [[nodiscard]] std::uint64_t state_hash() const noexcept;
 
 private:
-    Mission(std::uint64_t seed, Board board);
+    Mission(std::uint64_t seed, Board board, std::vector<Intent> intents);
 
     [[nodiscard]] std::expected<void, Rejection> check_engineer(UnitId id) const;
     std::expected<void, Rejection> apply_move(const MoveCommand& move);
     std::expected<void, Rejection> apply_shove(const ShoveCommand& shove);
     void apply_end_turn();
+    void resolve_attacks();
+    void plan_crawlers();
+    void plan_crawler(UnitId id);
     void emit_damage(UnitId id);
 
     Board board_;
     std::uint64_t seed_ = 0;
     int turn_ = 1;
     std::vector<ActionState> actions_; ///< Indexed by UnitId.
+    std::vector<Intent> intents_;      ///< Indexed by UnitId.
     std::vector<Event> events_;
 };
 

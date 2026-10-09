@@ -7,7 +7,10 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
+#include <cstdlib>
+#include <limits>
 #include <numeric>
+#include <tuple>
 #include <utility>
 
 namespace breakwater {
@@ -18,10 +21,106 @@ namespace {
     return !board.flooded(c) && board.tile(c).building_hp == 0 && !board.unit_at(c).has_value();
 }
 
+/// Crawlers swim: anything without a building or a unit (docs/RULES.md, Units).
+[[nodiscard]] bool crawler_can_enter(const Board& board, Coord c) {
+    return board.tile(c).building_hp == 0 && !board.unit_at(c).has_value();
+}
+
+constexpr std::array kDirections{Direction::North, Direction::East, Direction::South, Direction::West};
+
+/// One way a crawler could spend its turn: walk to `dest`, then strike `dir`.
+struct Plan {
+    int target_class = 0; ///< 0 engineer, 1 building.
+    int steps = 0;
+    Coord dest;
+    Direction dir = Direction::North;
+
+    /// The ranking key from docs/RULES.md, "Crawler intent": lowest wins.
+    [[nodiscard]] auto key() const { return std::tuple{target_class, steps, dest.y, dest.x, static_cast<int>(dir)}; }
+};
+
+/// 0 for a living engineer, 1 for a standing building, empty for anything a
+/// crawler would not aim at.
+[[nodiscard]] std::optional<int> target_class(const Board& board, Coord c) {
+    if (const auto u = board.unit_at(c); u && board.unit(*u).kind == UnitKind::Engineer) {
+        return 0;
+    }
+    if (board.tile(c).building_hp > 0) {
+        return 1;
+    }
+    return std::nullopt;
+}
+
+[[nodiscard]] int manhattan(Coord a, Coord b) { return std::abs(a.x - b.x) + std::abs(a.y - b.y); }
+
+/// Distance to the nearest standing building, or empty if none stands.
+[[nodiscard]] std::optional<int> nearest_building(const Board& board, Coord from) {
+    std::optional<int> best;
+    for (int y = 0; y < kBoardSize; ++y) {
+        for (int x = 0; x < kBoardSize; ++x) {
+            if (board.tile({x, y}).building_hp > 0) {
+                const int d = manhattan(from, {x, y});
+                best = best ? std::min(*best, d) : d;
+            }
+        }
+    }
+    return best;
+}
+
+using Distances = std::array<int, kTileCount>;
+
+/// The best plan over every reachable destination and direction, or empty if
+/// no target is in reach. Tiles are visited in key order, so strict-less keeps
+/// the first of equals.
+[[nodiscard]] std::optional<Plan> best_attack(const Board& board, const Distances& distance) {
+    std::optional<Plan> best;
+    for (std::size_t i = 0; i < kTileCount; ++i) {
+        if (distance.at(i) == kUnreachable) {
+            continue;
+        }
+        const Coord dest = tile_coord(i);
+        for (const Direction dir : kDirections) {
+            const Coord target = step(dest, dir);
+            const auto cls = in_bounds(target) ? target_class(board, target) : std::nullopt;
+            if (!cls) {
+                continue;
+            }
+            const Plan plan{.target_class = *cls, .steps = distance.at(i), .dest = dest, .dir = dir};
+            if (!best || plan.key() < best->key()) {
+                best = plan;
+            }
+        }
+    }
+    return best;
+}
+
+/// No target in reach: close on the town. Ranked by distance to the nearest
+/// standing building, then steps, then y, then x. With no building standing,
+/// hold position.
+[[nodiscard]] Coord approach_town(const Board& board, const Distances& distance, Coord from) {
+    Coord dest = from;
+    auto best_key = std::tuple{std::numeric_limits<int>::max(), 0, 0, 0};
+    for (std::size_t i = 0; i < kTileCount; ++i) {
+        const Coord c = tile_coord(i);
+        const auto town = nearest_building(board, c);
+        if (distance.at(i) == kUnreachable || !town) {
+            continue;
+        }
+        if (const auto key = std::tuple{*town, distance.at(i), c.y, c.x}; key < best_key) {
+            best_key = key;
+            dest = c;
+        }
+    }
+    return dest;
+}
+
 } // namespace
 
-Mission::Mission(std::uint64_t seed, Board board)
-    : board_{std::move(board)}, seed_{seed}, actions_(board_.unit_count(), ActionState::Ready) {}
+Mission::Mission(std::uint64_t seed, Board board, std::vector<Intent> intents)
+    : board_{std::move(board)}, seed_{seed}, actions_(board_.unit_count(), ActionState::Ready),
+      intents_{std::move(intents)} {
+    intents_.resize(board_.unit_count());
+}
 
 Mission Mission::generate(std::uint64_t seed) {
     Board board = Board::generate(seed);
@@ -39,12 +138,16 @@ Mission Mission::generate(std::uint64_t seed) {
         std::swap(columns.at(i), columns.at(pick));
         (void)board.add_unit(UnitKind::Engineer, {columns.at(i), kDeployRow}, kUnitHp);
     }
-    return Mission{seed, std::move(board)};
+    return Mission{seed, std::move(board), {}};
 }
 
-Mission Mission::from_board(std::uint64_t seed, Board board) { return Mission{seed, std::move(board)}; }
+Mission Mission::from_board(std::uint64_t seed, Board board, std::vector<Intent> intents) {
+    return Mission{seed, std::move(board), std::move(intents)};
+}
 
 ActionState Mission::action_state(UnitId id) const { return actions_.at(id); }
+
+Intent Mission::intent(UnitId id) const { return board_.unit(id).alive() ? intents_.at(id) : std::nullopt; }
 
 std::vector<Coord> Mission::reachable(UnitId engineer) const {
     if (!check_engineer(engineer) || actions_.at(engineer) != ActionState::Ready) {
@@ -158,11 +261,70 @@ std::expected<void, Rejection> Mission::apply_shove(const ShoveCommand& shove) {
 }
 
 void Mission::apply_end_turn() {
-    // The enemy phase (docs/RULES.md) lands here: attacks, tide, spawns, and
-    // crawler plans, in that order.
+    // The enemy phase, in the order docs/RULES.md gives. The tide and spawns
+    // land between the two steps here (#10).
+    resolve_attacks();
+    plan_crawlers();
     ++turn_;
     std::ranges::fill(actions_, ActionState::Ready);
     events_.push_back(Event::turn_started(turn_));
+}
+
+void Mission::resolve_attacks() {
+    // Ascending id is spawn order. Liveness is checked at each crawler's own
+    // turn, so a crawler killed earlier in this step never strikes.
+    for (UnitId id = 0; id < board_.unit_count(); ++id) {
+        const Intent dir = std::exchange(intents_.at(id), std::nullopt);
+        if (!dir || !board_.unit(id).alive()) {
+            continue;
+        }
+        const Coord from = board_.unit(id).pos;
+        const Coord at = step(from, *dir);
+        events_.push_back({.kind = EventKind::AttackResolved, .unit = id, .from = from, .to = at, .value = 0});
+        if (!in_bounds(at)) {
+            continue; // Shoved to the edge and facing off the board: a miss.
+        }
+        if (const auto victim = board_.unit_at(at)) {
+            board_.damage_unit(*victim, kAttackDamage);
+            emit_damage(*victim);
+        } else if (board_.tile(at).building_hp > 0) {
+            board_.damage_building(at, kAttackDamage);
+            events_.push_back({.kind = EventKind::BuildingDamaged,
+                               .unit = id,
+                               .from = from,
+                               .to = at,
+                               .value = board_.tile(at).building_hp});
+        }
+    }
+}
+
+void Mission::plan_crawlers() {
+    for (UnitId id = 0; id < board_.unit_count(); ++id) {
+        if (board_.unit(id).kind == UnitKind::Crawler && board_.unit(id).alive()) {
+            plan_crawler(id);
+        }
+    }
+}
+
+void Mission::plan_crawler(UnitId id) {
+    const Coord from = board_.unit(id).pos;
+    const auto distance =
+        step_distances(from, kCrawlerMoveRange, [this](Coord c) { return crawler_can_enter(board_, c); });
+    const auto plan = best_attack(board_, distance);
+    const Coord dest = plan ? plan->dest : approach_town(board_, distance, from);
+
+    if (dest != from) {
+        board_.place(id, dest);
+        events_.push_back({.kind = EventKind::UnitMoved, .unit = id, .from = from, .to = dest, .value = 0});
+    }
+    intents_.at(id) = plan ? Intent{plan->dir} : std::nullopt;
+    if (plan) {
+        events_.push_back({.kind = EventKind::IntentDeclared,
+                           .unit = id,
+                           .from = dest,
+                           .to = step(dest, plan->dir),
+                           .value = static_cast<int>(plan->dir)});
+    }
 }
 
 void Mission::emit_damage(UnitId id) {
@@ -180,6 +342,10 @@ std::uint64_t Mission::state_hash() const noexcept {
     detail::fnv_int(hash, turn_);
     for (const ActionState a : actions_) {
         detail::fnv_bytes(hash, static_cast<std::uint64_t>(a), 1);
+    }
+    for (UnitId id = 0; id < intents_.size(); ++id) {
+        const Intent i = intent(id);
+        detail::fnv_bytes(hash, i ? static_cast<std::uint64_t>(*i) : 0xFFU, 1);
     }
     return hash;
 }

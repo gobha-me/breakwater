@@ -119,6 +119,19 @@ PushOutcome Board::push(UnitId id, Direction dir) {
     return PushOutcome::Moved;
 }
 
+void Board::damage_unit(UnitId id, int amount) {
+    assert(units_.at(id).alive());
+    assert(amount > 0);
+    units_.at(id).hp -= amount;
+}
+
+void Board::damage_building(Coord c, int amount) {
+    Tile& t = tile_mut(c);
+    assert(t.building_hp > 0);
+    assert(amount > 0);
+    t.building_hp = static_cast<std::uint8_t>(std::max(0, t.building_hp - amount));
+}
+
 std::uint64_t Board::state_hash() const noexcept {
     std::uint64_t hash = detail::kFnvOffset;
     for (const Tile& t : tiles_) {

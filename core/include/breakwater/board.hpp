@@ -44,6 +44,11 @@ enum class Direction : std::uint8_t { North, East, South, West };
     return (static_cast<std::size_t>(c.y) * static_cast<std::size_t>(kBoardSize)) + static_cast<std::size_t>(c.x);
 }
 
+/// Inverse of tile_index. Precondition: i < kTileCount.
+[[nodiscard]] constexpr Coord tile_coord(std::size_t i) noexcept {
+    return {static_cast<int>(i % kBoardSize), static_cast<int>(i / kBoardSize)};
+}
+
 struct Tile {
     std::uint8_t elevation = 1;
     std::uint8_t building_hp = 0; ///< 0 means no building.
@@ -98,6 +103,12 @@ public:
 
     /// Pushes a unit one tile. Resolves bump damage and drowning.
     PushOutcome push(UnitId id, Direction dir);
+
+    /// Precondition: the unit is alive and `amount` is positive.
+    void damage_unit(UnitId id, int amount);
+    /// Precondition: `c` has a standing building and `amount` is positive.
+    /// The building's HP stops at 0.
+    void damage_building(Coord c, int amount);
 
     /// FNV-1a over the full game state. Equal states hash equal; used by
     /// determinism and replay tests.
