@@ -87,16 +87,34 @@ jobs:
     name: clang, extension and clang-tidy
     runs-on: ubuntu-24.04
     timeout-minutes: 45
+    env:
+      # CMake reads the launcher from the environment, so the presets stay
+      # untouched and local builds work with or without ccache installed.
+      CMAKE_CXX_COMPILER_LAUNCHER: ccache
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_MAXSIZE: 500M
     steps:
       - uses: actions/checkout@v7
 
-      - name: Install Clang tooling and Ninja
+      - name: Install Clang tooling, Ninja and ccache
         run: |
           wget -qO /tmp/llvm.sh https://apt.llvm.org/llvm.sh
           chmod +x /tmp/llvm.sh
           sudo /tmp/llvm.sh "$CLANG_VERSION"
-          sudo apt-get install -y "clang-tidy-$CLANG_VERSION" ninja-build
+          sudo apt-get install -y "clang-tidy-$CLANG_VERSION" ninja-build ccache
           sudo ln -sf "/usr/bin/clang++-$CLANG_VERSION" /usr/local/bin/clang++
+
+      # Most of this job is godot-cpp, which only changes with its tag. ccache
+      # keys on preprocessed source and flags, so a stale restore costs a miss,
+      # never a wrong object. The key changes with the compiler and with the
+      # extension's CMakeLists.txt, which pins the godot-cpp tag.
+      - name: Restore compiler cache
+        uses: actions/cache@v6
+        with:
+          path: .ccache
+          key: ccache-clang${{ env.CLANG_VERSION }}-${{ hashFiles('extension/CMakeLists.txt') }}-${{ github.sha }}
+          restore-keys: |
+            ccache-clang${{ env.CLANG_VERSION }}-${{ hashFiles('extension/CMakeLists.txt') }}-
 
       - name: Configure
         run: cmake --preset dev
@@ -108,6 +126,9 @@ jobs:
 
       - name: Test
         run: ctest --preset dev
+
+      - name: Compiler cache statistics
+        run: ccache --show-stats
 
       - name: clang-tidy
         env:
