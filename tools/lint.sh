@@ -7,4 +7,4 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 [[ -f build/dev/compile_commands.json ]] || { echo "lint: run 'cmake --preset dev' first" >&2; exit 2; }
-"${RUN_CLANG_TIDY:-run-clang-tidy}" -quiet -p build/dev "$PWD/(core|tests|extension)/.*\.cpp$"
+"${RUN_CLANG_TIDY:-run-clang-tidy}" -quiet -p build/dev "$PWD/(core|tests|extension|tools)/.*\.cpp$"

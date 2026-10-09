@@ -1,0 +1,4 @@
+breakwater-log 1
+# Engineer 0 cannot reach the far corner in one move.
+seed 20
+move 0 7 0
