@@ -27,7 +27,12 @@ captures, replay hashes), never just claim completion.
 5. `tools/lint.sh`: clang-tidy, warnings as errors.
 6. `tools/replay_check.sh`: every log in `tests/logs/` replays to its committed
    `.hashes` under Clang and GCC, debug and release.
-7. `tools/godot_smoke.sh`: headless Godot loads the extension and checks the bridge.
+7. `tools/seeds_check.sh`: every offered seed (0-999) is proven winnable by the
+   solver with a replayed witness, and the unproven ones are exactly
+   `kRejectedSeeds`. A rule change that moves them means regenerating the list
+   with `bw_solve --range 0-999 --budget 1000000`.
+8. `tools/godot_smoke.sh`: headless Godot loads the extension, checks the
+   bridge, autoplays every log through the scene, and plays by injected input.
 
 Suppressions: a disabled check in `.clang-tidy` carries its reason there; an
 inline suppression names the exact check, with the reason on the line above
@@ -86,7 +91,7 @@ at a checkpoint named in `docs/ROADMAP.md`.
 6. **Next issue.** No idling between issues.
 
 CI runs the gates that need no display: format, ASan and UBSan, GCC, Clang,
-clang-tidy, replay determinism. The Godot smoke test and captures need a Godot binary and a display,
+clang-tidy, replay determinism, seed proofs. The Godot smoke test and captures need a Godot binary and a display,
 so they stay local and their output belongs in the PR body.
 
 A decision that comes up mid-issue gets made and recorded in the issue, not

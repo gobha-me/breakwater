@@ -36,6 +36,10 @@ func _run() -> void:
 	await _frames(3)
 
 	_check_picking()
+	_main.restart(78)
+	_check(_main.mission.get_seed() == 79, "a rejected seed is never played: 78 starts mission 79")
+	await _key(KEY_N)
+	_check(_main.mission.get_seed() == 80, "N moves to the next offered seed")
 	for s in str(args.get("seeds", "20")).split(","):
 		await _play_by_clicks(int(s))
 	for path in str(args.get("play-logs", "")).split(",", false):

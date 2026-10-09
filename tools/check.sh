@@ -11,6 +11,7 @@ gate "gcc";              cmake --preset gcc >/dev/null && cmake --build --preset
 gate "clang dev";        cmake --preset dev >/dev/null && cmake --build --preset dev && ctest --preset dev
 gate "clang-tidy";       tools/lint.sh
 gate "replay";           tools/replay_check.sh
+gate "proof";            tools/seeds_check.sh
 gate "godot smoke";      tools/godot_smoke.sh
 
 printf '\nAll gates passed.\n'

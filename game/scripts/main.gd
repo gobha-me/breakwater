@@ -48,9 +48,9 @@ func _ready() -> void:
 		var err := mission.load_log(FileAccess.get_file_as_string(args["log"]))
 		if not err.is_empty():
 			push_error("log: " + err)
+		_rebuild()
 	else:
-		mission.generate(int(args.get("seed", str(mission_seed))))
-	_rebuild()
+		restart(int(args.get("seed", str(mission_seed))))
 	if args.has("autoplay"):
 		# Real-time watchdog: a script error mid-autoplay must fail the run,
 		# not leave a headless process waiting forever.
@@ -68,14 +68,22 @@ func _rebuild() -> void:
 	input.refresh()
 
 
-## A fresh mission from `seed`, discarding the current one.
+## A fresh mission from `seed`, discarding the current one. Only offered
+## seeds (proven winnable) are played; any other moves on to the next one.
 func restart(seed: int) -> void:
 	if playing:
 		return
+	var offered := seed if BreakwaterMission.is_offered(seed) else BreakwaterMission.next_offered(seed)
 	mission = BreakwaterMission.new()
-	mission.generate(seed)
+	mission.generate(offered)
 	_rebuild()
-	hud.say("Seed %d." % seed)
+	hud.say("Mission %d: proven survivable." % offered if offered == seed
+			else "Seed %d is not proven survivable; mission %d instead." % [seed, offered])
+
+
+## The next mission the game offers.
+func next_mission() -> void:
+	restart(BreakwaterMission.next_offered(mission.get_seed()))
 
 
 ## Writes every accepted command so far as a log bw_replay can replay, and
