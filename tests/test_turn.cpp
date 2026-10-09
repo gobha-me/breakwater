@@ -96,8 +96,8 @@ void retreat_and_end_turn(Mission& mission) {
 TEST_CASE("a turn runs its phases in the order the rules give", "[turn][pipeline]") {
     Board board = flat_board();
     const auto c = board.add_unit(UnitKind::Crawler, {3, 3}, 2);
-    const auto target = board.add_unit(UnitKind::Engineer, {3, 4}, 2);
-    set_elevation(board, {1, 6}, 1); // Dry at tide 1, sea at tide 2.
+    const auto target = board.add_unit(UnitKind::Engineer, {3, 4}, 3); // Survives one strike of 2.
+    set_elevation(board, {1, 6}, 1);                                   // Dry at tide 1, sea at tide 2.
     const auto doomed = board.add_unit(UnitKind::Engineer, {1, 6}, 2);
     set_elevation(board, {5, 2}, 0);
     add_building(board, {7, 7});

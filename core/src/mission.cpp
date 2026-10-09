@@ -31,7 +31,7 @@ constexpr std::array kDirections{Direction::North, Direction::East, Direction::S
 
 /// One way a crawler could spend its turn: walk to `dest`, then strike `dir`.
 struct Plan {
-    int target_class = 0; ///< 0 engineer, 1 building.
+    int target_class = 0; ///< 0 building, 1 engineer.
     int steps = 0;
     Coord dest;
     Direction dir = Direction::North;
@@ -40,13 +40,13 @@ struct Plan {
     [[nodiscard]] auto key() const { return std::tuple{target_class, steps, dest.y, dest.x, static_cast<int>(dir)}; }
 };
 
-/// 0 for a living engineer, 1 for a standing building, empty for anything a
-/// crawler would not aim at.
+/// 0 for a standing building, 1 for a living engineer, empty for anything a
+/// crawler would not aim at. The town is what crawlers came for.
 [[nodiscard]] std::optional<int> target_class(const Board& board, Coord c) {
-    if (const auto u = board.unit_at(c); u && board.unit(*u).kind == UnitKind::Engineer) {
+    if (board.tile(c).building_hp > 0) {
         return 0;
     }
-    if (board.tile(c).building_hp > 0) {
+    if (const auto u = board.unit_at(c); u && board.unit(*u).kind == UnitKind::Engineer) {
         return 1;
     }
     return std::nullopt;

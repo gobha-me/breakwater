@@ -34,10 +34,15 @@ loss.
 | Unit | Count | HP | Movement |
 |---|---|---|---|
 | Engineer | 3 | 2 | Up to 2 steps over dry, empty tiles. |
-| Crawler | 2 at the start, then spawns | 2 | Up to 2 steps over any tile without a building or a unit, water included. |
+| Crawler | 2 at the start, then spawns | 2 | Up to 3 steps over any tile without a building or a unit, water included. |
 
-Every unit has the same 2 HP so that one bump never kills, and two always do.
-That keeps the arithmetic of a shove readable at a glance.
+Every unit and building has 2 HP. A bump deals 1 and a crawler's strike deals
+2, so one bump never kills, two always do, and a strike that lands kills or
+razes whatever it hits. That keeps the arithmetic readable at a glance, and it
+makes every telegraphed strike a decision: stop it or lose what it hits.
+
+Crawlers outreach engineers (3 steps to 2) so the threat arrives before the
+tide forces the retreat; see "Balance" below.
 
 ## Deployment
 
@@ -102,8 +107,8 @@ Each step runs in this order. Within a step, crawlers act in ascending id,
 which is spawn order.
 
 1. **Attacks resolve.** Each living crawler hits the tile its intent points at,
-   taken from where it stands *now*. A unit there takes 1 damage, crawlers
-   included. A building there takes 1 damage. An empty tile absorbs the hit.
+   taken from where it stands *now*. A unit there takes 2 damage, crawlers
+   included. A building there takes 2 damage. An empty tile absorbs the hit.
    A crawler that died earlier in this step does not attack.
 2. **The tide rises** by 1. Engineers on flooded tiles drown.
 3. **Spawns**, by the table above.
@@ -125,8 +130,9 @@ destination within 2 steps (staying put counts) together with an attack
 direction from that destination. Plans are ranked by this key, lowest first,
 and the first plan wins:
 
-1. Target class: an engineer is 0, a building is 1. A plan aimed at anything
-   else is not a plan.
+1. Target class: a building is 0, an engineer is 1. A plan aimed at anything
+   else is not a plan. The town is what the crawlers came for; an engineer is
+   only a target when no building is in reach.
 2. Steps taken.
 3. Destination `y`, then `x`.
 4. Direction, in the order North, East, South, West.
@@ -142,6 +148,26 @@ to the player: the same position always provokes the same move.
 Targets are chosen against the board *at planning time*. If the player later
 moves the target away, the attack still lands on the declared tile, whatever is
 there.
+
+## Balance
+
+The numbers above are tuned with the solver (`bw_solve`), not by feel. The
+question is whether the game's one verb is necessary: a mission a player can
+win by walking inland, without ever shoving, fails pillar 2.
+
+| Rules | Solver, with shoves | Retreat policy, no shoves | Idle |
+|---|---|---|---|
+| Bootstrap: crawlers prefer engineers, strike 1, reach 2 | 1000 / 1000 winnable | **841** / 1000 won | 0 |
+| Now: crawlers prefer buildings, strike 2, reach 3 | 993 / 1000 proven winnable, 7 unproven | **10** / 1000 won | 0 |
+
+Under the bootstrap rules the solver could win all 1000 seeds without a single
+shove. Engineers drew every strike and simply stepped out of the telegraphed
+tiles. Now strikes go for the town, which cannot step aside, and land hard
+enough to raze it. A shove that turns a crawler is the main way to save a
+building.
+
+Seeds the solver cannot prove are rejected at generation, so every mission
+offered is winnable.
 
 ## Outcome
 

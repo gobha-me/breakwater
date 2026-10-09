@@ -16,8 +16,8 @@ namespace breakwater {
 inline constexpr int kEngineerCount = 3;
 inline constexpr int kUnitHp = 2;
 inline constexpr int kEngineerMoveRange = 2;
-inline constexpr int kCrawlerMoveRange = 2;
-inline constexpr int kAttackDamage = 1;
+inline constexpr int kCrawlerMoveRange = 3;
+inline constexpr int kAttackDamage = 2;
 inline constexpr int kDeployRow = 4;
 inline constexpr int kStartTide = 1;
 inline constexpr int kTurnCount = 5;

@@ -45,7 +45,7 @@ TEST_CASE("write then parse round-trips every command", "[log]") {
 }
 
 TEST_CASE("the committed logs parse and write back canonically", "[log]") {
-    for (const auto* name : {"win-seed20.log", "loss-engineers-seed20.log", "loss-town-seed19.log"}) {
+    for (const auto* name : {"win-seed20.log", "loss-engineers-seed3.log", "loss-town-seed19.log"}) {
         CAPTURE(name);
         const auto parsed = parse_log(read_log(name));
         REQUIRE(parsed);

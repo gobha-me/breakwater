@@ -79,15 +79,15 @@ TEST_CASE("crawler intent follows the ranking key in docs/RULES.md", "[intent][p
                                   .value = static_cast<int>(Direction::South)}});
     }
 
-    SECTION("an engineer outranks a building, even two steps further") {
+    SECTION("a building outranks an engineer, even an adjacent one") {
         Board board = flat_board();
         const auto c = board.add_unit(UnitKind::Crawler, {0, 0}, 2);
-        add_building(board, {1, 0});
-        (void)board.add_unit(UnitKind::Engineer, {0, 3}, 2);
+        (void)board.add_unit(UnitKind::Engineer, {0, 1}, 2);
+        add_building(board, {3, 0});
         Mission mission = scenario(board);
         (void)end_turn(mission);
-        CHECK(mission.board().unit(c).pos == Coord{0, 2});
-        CHECK(mission.intent(c) == Intent{Direction::South});
+        CHECK(mission.board().unit(c).pos == Coord{2, 0});
+        CHECK(mission.intent(c) == Intent{Direction::East});
     }
 
     SECTION("a building in reach when no engineer is; ties go to the lower row") {
@@ -132,11 +132,11 @@ TEST_CASE("crawler intent follows the ranking key in docs/RULES.md", "[intent][p
         (void)board.add_unit(UnitKind::Engineer, {7, 0}, 2);
         Mission mission = scenario(board);
         const auto events = end_turn(mission);
-        CHECK(mission.board().unit(c).pos == Coord{0, 2});
+        CHECK(mission.board().unit(c).pos == Coord{0, 3}); // Three steps: the crawler's full reach.
         CHECK_FALSE(mission.intent(c).has_value());
         CHECK(of_kind(events, EventKind::IntentDeclared).empty());
         CHECK(of_kind(events, EventKind::UnitMoved) ==
-              std::vector<Event>{{.kind = EventKind::UnitMoved, .unit = c, .from = {0, 0}, .to = {0, 2}, .value = 0}});
+              std::vector<Event>{{.kind = EventKind::UnitMoved, .unit = c, .from = {0, 0}, .to = {0, 3}, .value = 0}});
     }
 
     SECTION("no building standing and nothing in reach: hold position") {
@@ -164,15 +164,16 @@ TEST_CASE("crawler intent follows the ranking key in docs/RULES.md", "[intent][p
         CHECK(mission.intent(second) == Intent{Direction::East});
     }
 
-    SECTION("crawlers swim, and never walk through buildings or units") {
+    SECTION("crawlers swim: water is the only path in reach to the target") {
         Board board = flat_board();
         const auto c = board.add_unit(UnitKind::Crawler, {3, 0}, 2);
         add_water(board, {3, 1});
-        add_building(board, {4, 1}, 2);
+        // Every tile next to the engineer is four land steps away; (3,2) is
+        // two steps through the water at (3,1).
         (void)board.add_unit(UnitKind::Engineer, {3, 3}, 2);
         Mission mission = scenario(board);
         (void)end_turn(mission);
-        CHECK(mission.board().unit(c).pos == Coord{3, 2}); // Through the water at (3,1).
+        CHECK(mission.board().unit(c).pos == Coord{3, 2});
         CHECK(mission.intent(c) == Intent{Direction::South});
     }
 }
@@ -200,10 +201,10 @@ TEST_CASE("intents are published before the player acts and hold through it", "[
 }
 
 TEST_CASE("attacks resolve against whatever is there now", "[intent][resolve]") {
-    SECTION("a strike damages the engineer it was aimed at") {
+    SECTION("a strike deals its damage to the engineer it was aimed at") {
         Board board = flat_board();
         const auto c = board.add_unit(UnitKind::Crawler, {3, 3}, 2);
-        const auto e = board.add_unit(UnitKind::Engineer, {3, 4}, 2);
+        const auto e = board.add_unit(UnitKind::Engineer, {3, 4}, 3); // Survives one strike of 2.
         Mission mission = scenario(board, {Intent{Direction::South}});
         const auto events = end_turn(mission);
         CHECK(mission.board().unit(e).hp == 1);
@@ -222,7 +223,7 @@ TEST_CASE("attacks resolve against whatever is there now", "[intent][resolve]") 
         REQUIRE(mission.apply(ShoveCommand{.engineer = e, .dir = Direction::East}));
         REQUIRE(mission.board().unit(c1).pos == Coord{4, 3});
         (void)end_turn(mission);
-        CHECK(mission.board().unit(c2).hp == 1);
+        CHECK_FALSE(mission.board().unit(c2).alive()); // A strike of 2 kills a crawler outright.
     }
 
     SECTION("a building takes the hit, and a razed one absorbs no more") {
@@ -310,7 +311,7 @@ TEST_CASE("intent planning is deterministic", "[intent][determinism]") {
         Mission mission = Mission::from_board(42, board);
         std::vector<Event> log;
         std::vector<std::uint64_t> hashes;
-        for (int turn = 0; turn < 4; ++turn) {
+        for (int turn = 0; turn < 4 && mission.outcome() == breakwater::Outcome::InProgress; ++turn) {
             const auto events = end_turn(mission);
             log.insert(log.end(), events.begin(), events.end());
             hashes.push_back(mission.state_hash());
