@@ -3,7 +3,7 @@ project(breakwater VERSION 0.1.0 LANGUAGES CXX)
 
 option(BREAKWATER_BUILD_TESTS "Build the core unit tests" ON)
 option(BREAKWATER_BUILD_EXTENSION "Build the Godot GDExtension (fetches godot-cpp)" ON)
-option(BREAKWATER_BUILD_TOOLS "Build the command-line tools (bw_replay)" ON)
+option(BREAKWATER_BUILD_TOOLS "Build the command-line tools (bw_replay, bw_solve)" ON)
 option(BREAKWATER_WERROR "Treat compiler warnings as errors" ON)
 set(BREAKWATER_SANITIZE "" CACHE STRING "Comma-separated -fsanitize= list for core and tests (e.g. address,undefined)")
 
@@ -19,6 +19,7 @@ add_subdirectory(core)
 
 if(BREAKWATER_BUILD_TOOLS)
     add_subdirectory(tools/replay)
+    add_subdirectory(tools/solve)
 endif()
 
 if(BREAKWATER_BUILD_TESTS)

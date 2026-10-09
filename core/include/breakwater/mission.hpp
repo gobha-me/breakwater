@@ -54,6 +54,8 @@ struct Setup {
     std::vector<Intent> intents;
     /// Spawns per turn. Scenarios that must not be disturbed pass zeros.
     SpawnTable spawns = kSpawnTable;
+    /// The turn the scenario starts on, 1 to kTurnCount.
+    int turn = 1;
 };
 
 struct MoveCommand {
