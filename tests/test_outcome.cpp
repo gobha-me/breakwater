@@ -37,7 +37,7 @@ using breakwater::UnitKind;
 namespace {
 
 // Three committed missions in tests/logs/, one per ending, each recorded from
-// a fixed policy (retreat inland, or stand idle). The golden hashes live in the
+// a fixed policy (stand idle, retreat inland) or from the solver's witness. The golden hashes live in the
 // .hashes file beside each log, in bw_replay's output format, so this test and
 // tools/replay_check.sh share one source of truth. A rule change that touches
 // these missions shows up in both; if it is intended, re-record them with
@@ -138,7 +138,7 @@ Mission scenario(const Board& board, std::vector<Intent> intents = {}) {
 
 } // namespace
 
-TEST_CASE("scripted mission: holding the high ground wins", "[outcome][script]") {
+TEST_CASE("scripted mission: the solver's witness wins, with shoves", "[outcome][script]") {
     auto [mission, hashes] = replay("win-seed20.log");
     CHECK(hashes == golden_hashes("win-seed20.hashes"));
     CHECK(mission.outcome() == Outcome::Won);
@@ -149,8 +149,8 @@ TEST_CASE("scripted mission: holding the high ground wins", "[outcome][script]")
 }
 
 TEST_CASE("scripted mission: idling on the beach loses every engineer", "[outcome][script]") {
-    auto [mission, hashes] = replay("loss-engineers-seed20.log");
-    CHECK(hashes == golden_hashes("loss-engineers-seed20.hashes"));
+    auto [mission, hashes] = replay("loss-engineers-seed3.log");
+    CHECK(hashes == golden_hashes("loss-engineers-seed3.hashes"));
     CHECK(mission.outcome() == Outcome::Lost);
     CHECK_FALSE(any_engineer_alive(mission.board()));
     CHECK(standing_buildings(mission.board()) > 0);

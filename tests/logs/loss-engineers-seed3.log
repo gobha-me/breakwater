@@ -1,0 +1,7 @@
+breakwater-log 1
+# Stand idle on the beach.
+# Ends: lost on turn 3, every engineer struck down or drowned; the town stands.
+seed 3
+end
+end
+end
