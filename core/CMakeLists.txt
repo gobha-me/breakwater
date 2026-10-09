@@ -1,4 +1,4 @@
-add_library(breakwater_core STATIC src/board.cpp src/mission.cpp)
+add_library(breakwater_core STATIC src/board.cpp src/log.cpp src/mission.cpp)
 add_library(breakwater::core ALIAS breakwater_core)
 
 target_include_directories(breakwater_core PUBLIC include)

@@ -59,14 +59,20 @@ struct Setup {
 struct MoveCommand {
     UnitId engineer = 0;
     Coord to;
+
+    friend constexpr bool operator==(const MoveCommand&, const MoveCommand&) = default;
 };
 
 struct ShoveCommand {
     UnitId engineer = 0;
     Direction dir = Direction::North;
+
+    friend constexpr bool operator==(const ShoveCommand&, const ShoveCommand&) = default;
 };
 
-struct EndTurnCommand {};
+struct EndTurnCommand {
+    friend constexpr bool operator==(EndTurnCommand, EndTurnCommand) = default;
+};
 
 using Command = std::variant<MoveCommand, ShoveCommand, EndTurnCommand>;
 

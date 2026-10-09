@@ -1,3 +1,4 @@
+#include "breakwater/log.hpp"
 #include "breakwater/mission.hpp"
 
 #include <catch2/catch_test_macros.hpp>
@@ -6,7 +7,10 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
-#include <span>
+#include <fstream>
+#include <sstream>
+#include <string>
+#include <string_view>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -31,79 +35,40 @@ using breakwater::UnitKind;
 
 namespace {
 
-// Three committed missions, one per ending. Each was recorded from a fixed
-// policy (retreat inland, or stand idle) and is replayed here command by
-// command. The hashes are goldens: after setup, then after every EndTurn. A
-// change to any rule that touches these missions shows up here first; if it
-// is intended, re-record them and say so in the PR.
+// Three committed missions in tests/logs/, one per ending. Each was recorded
+// from a fixed policy (retreat inland, or stand idle) and is replayed here
+// command by command. The hashes are goldens: after setup, then after every
+// EndTurn. A change to any rule that touches these missions shows up here
+// first; if it is intended, re-record them and say so in the PR.
 
-// Seed 20, retreating inland: won.
-constexpr auto kWinCommands = std::to_array<Command>({
-    MoveCommand{.engineer = 0, .to = {2, 6}},
-    MoveCommand{.engineer = 1, .to = {4, 5}},
-    MoveCommand{.engineer = 2, .to = {3, 6}},
-    EndTurnCommand{},
-    MoveCommand{.engineer = 0, .to = {1, 7}},
-    MoveCommand{.engineer = 1, .to = {4, 7}},
-    MoveCommand{.engineer = 2, .to = {2, 7}},
-    EndTurnCommand{},
-    MoveCommand{.engineer = 0, .to = {1, 6}},
-    MoveCommand{.engineer = 1, .to = {3, 7}},
-    MoveCommand{.engineer = 2, .to = {1, 7}},
-    EndTurnCommand{},
-    MoveCommand{.engineer = 0, .to = {2, 7}},
-    MoveCommand{.engineer = 1, .to = {4, 7}},
-    MoveCommand{.engineer = 2, .to = {1, 6}},
-    EndTurnCommand{},
-    MoveCommand{.engineer = 0, .to = {3, 7}},
-    MoveCommand{.engineer = 1, .to = {5, 7}},
-    EndTurnCommand{},
-});
+// win-seed20.log: retreating inland wins.
 constexpr std::array kWinHashes{
     0xe0686e3604c15897ULL, 0x77be4fa0eb52373eULL, 0xd0ed6d96136909f2ULL,
     0xd2394caef7439026ULL, 0xaa8b3c4537b8e140ULL, 0xaa71f5264b4bba09ULL,
 };
 
-// Seed 20, standing idle on the beach: the tide takes every engineer.
-constexpr auto kLossByEngineersCommands = std::to_array<Command>({
-    EndTurnCommand{},
-    EndTurnCommand{},
-    EndTurnCommand{},
-    EndTurnCommand{},
-});
+// loss-engineers-seed20.log: idling on the beach loses every engineer.
 constexpr std::array kLossByEngineersHashes{
     0xe0686e3604c15897ULL, 0x182dd175f348f703ULL, 0xae178e5fb0df0fc5ULL, 0x3f0b300763f0df70ULL, 0x38d1ad01dd08c9bbULL,
 };
 
-// Seed 19, retreating inland without a shove: the crawlers raze the town.
-constexpr auto kLossByTownCommands = std::to_array<Command>({
-    MoveCommand{.engineer = 0, .to = {6, 6}},
-    MoveCommand{.engineer = 1, .to = {3, 5}},
-    MoveCommand{.engineer = 2, .to = {7, 6}},
-    EndTurnCommand{},
-    MoveCommand{.engineer = 0, .to = {5, 7}},
-    MoveCommand{.engineer = 1, .to = {3, 7}},
-    MoveCommand{.engineer = 2, .to = {6, 7}},
-    EndTurnCommand{},
-    MoveCommand{.engineer = 0, .to = {4, 7}},
-    MoveCommand{.engineer = 1, .to = {1, 7}},
-    MoveCommand{.engineer = 2, .to = {5, 7}},
-    EndTurnCommand{},
-    MoveCommand{.engineer = 0, .to = {2, 7}},
-    MoveCommand{.engineer = 1, .to = {0, 7}},
-    MoveCommand{.engineer = 2, .to = {3, 7}},
-    EndTurnCommand{},
-});
+// loss-town-seed19.log: retreating without a shove loses the town.
 constexpr std::array kLossByTownHashes{
     0x2c8d468231d068e2ULL, 0xcfa978520b60c47eULL, 0x5a2acca036c6824eULL, 0xae74ee6cce571378ULL, 0x4202565090a422a7ULL,
 };
 
-/// Replays a script, requiring every command to be accepted, and returns the
-/// mission and the hash after setup and after each EndTurn.
-std::pair<Mission, std::vector<std::uint64_t>> replay(std::uint64_t seed, std::span<const Command> commands) {
-    Mission mission = Mission::generate(seed);
+/// Replays a committed log, requiring every command to be accepted, and
+/// returns the mission and the hash after setup and after each EndTurn.
+std::pair<Mission, std::vector<std::uint64_t>> replay(std::string_view name) {
+    std::ifstream in{std::string{BREAKWATER_LOG_DIR} + "/" + std::string{name}, std::ios::binary};
+    REQUIRE(in);
+    std::stringstream text;
+    text << in.rdbuf();
+    const auto log = breakwater::parse_log(text.str());
+    REQUIRE(log);
+    Mission mission = Mission::generate(log->seed);
     std::vector<std::uint64_t> hashes{mission.state_hash()};
-    for (const Command& command : commands) {
+    for (const Command& command : log->commands) {
         REQUIRE(mission.apply(command));
         if (std::holds_alternative<EndTurnCommand>(command)) {
             hashes.push_back(mission.state_hash());
@@ -165,7 +130,7 @@ Mission scenario(const Board& board, std::vector<Intent> intents = {}) {
 } // namespace
 
 TEST_CASE("scripted mission: holding the high ground wins", "[outcome][script]") {
-    auto [mission, hashes] = replay(20, kWinCommands);
+    auto [mission, hashes] = replay("win-seed20.log");
     CHECK(std::ranges::equal(hashes, kWinHashes));
     CHECK(mission.outcome() == Outcome::Won);
     CHECK(mission.turn() == kTurnCount);
@@ -175,7 +140,7 @@ TEST_CASE("scripted mission: holding the high ground wins", "[outcome][script]")
 }
 
 TEST_CASE("scripted mission: idling on the beach loses every engineer", "[outcome][script]") {
-    auto [mission, hashes] = replay(20, kLossByEngineersCommands);
+    auto [mission, hashes] = replay("loss-engineers-seed20.log");
     CHECK(std::ranges::equal(hashes, kLossByEngineersHashes));
     CHECK(mission.outcome() == Outcome::Lost);
     CHECK_FALSE(any_engineer_alive(mission.board()));
@@ -184,7 +149,7 @@ TEST_CASE("scripted mission: idling on the beach loses every engineer", "[outcom
 }
 
 TEST_CASE("scripted mission: never shoving loses the town", "[outcome][script]") {
-    auto [mission, hashes] = replay(19, kLossByTownCommands);
+    auto [mission, hashes] = replay("loss-town-seed19.log");
     CHECK(std::ranges::equal(hashes, kLossByTownHashes));
     CHECK(mission.outcome() == Outcome::Lost);
     CHECK(any_engineer_alive(mission.board()));
