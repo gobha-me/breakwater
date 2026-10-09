@@ -1,4 +1,5 @@
 #include "breakwater_board.hpp"
+#include "breakwater_mission.hpp"
 
 #include <gdextension_interface.h>
 #include <godot_cpp/core/class_db.hpp>
@@ -12,6 +13,7 @@ void initialize_breakwater(godot::ModuleInitializationLevel level) {
         return;
     }
     GDREGISTER_CLASS(breakwater::gd::BreakwaterBoard);
+    GDREGISTER_CLASS(breakwater::gd::BreakwaterMission);
 }
 
 void uninitialize_breakwater(godot::ModuleInitializationLevel /*level*/) {}
