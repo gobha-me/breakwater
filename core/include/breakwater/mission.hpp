@@ -2,6 +2,7 @@
 
 #include "breakwater/board.hpp"
 
+#include <array>
 #include <cstdint>
 #include <expected>
 #include <optional>
@@ -19,6 +20,7 @@ inline constexpr int kCrawlerMoveRange = 2;
 inline constexpr int kAttackDamage = 1;
 inline constexpr int kDeployRow = 4;
 inline constexpr int kStartTide = 1;
+inline constexpr int kTurnCount = 5;
 
 /// Where an engineer is in its turn: it may move and then shove, and a shove
 /// ends its turn.
@@ -28,10 +30,25 @@ enum class ActionState : std::uint8_t {
     Done,  ///< Shoved; nothing left this turn.
 };
 
+/// Crawlers spawned at setup (index 0) and in the enemy phase of turns 1-4.
+/// The last turn has no entry: nothing spawns or plans after it.
+using SpawnTable = std::array<int, kTurnCount>;
+
+inline constexpr SpawnTable kSpawnTable{2, 1, 1, 1, 0};
+
 /// A crawler's telegraphed attack: the direction it will strike next enemy
 /// phase, from wherever it stands then. Empty means no attack. A direction, not
 /// a target, so shoving a crawler retargets it (docs/RULES.md).
 using Intent = std::optional<Direction>;
+
+/// Everything a hand-built mission needs besides its board.
+struct Setup {
+    /// What crawlers have telegraphed, indexed by UnitId. Missing entries mean
+    /// no attack.
+    std::vector<Intent> intents;
+    /// Spawns per turn. Scenarios that must not be disturbed pass zeros.
+    SpawnTable spawns = kSpawnTable;
+};
 
 struct MoveCommand {
     UnitId engineer = 0;
@@ -87,6 +104,8 @@ enum class EventKind : std::uint8_t {
     TurnStarted,     ///< Turn `value` begins.
     IntentDeclared,  ///< Crawler `unit` at `from` will strike `to`; `value` is the Direction.
     AttackResolved,  ///< Crawler `unit` at `from` struck `to`, whatever was there.
+    TideRose,        ///< The tide is now `value`.
+    UnitSpawned,     ///< Crawler `unit` came ashore at `to`.
 };
 
 struct Event {
@@ -112,9 +131,7 @@ public:
 
     /// A mission over a hand-built board, for scenarios and tests. Every unit
     /// starts Ready on turn 1. `seed` drives the mission's later draws.
-    /// `intents`, indexed by UnitId, presets what crawlers have telegraphed;
-    /// missing entries mean no attack.
-    [[nodiscard]] static Mission from_board(std::uint64_t seed, Board board, std::vector<Intent> intents = {});
+    [[nodiscard]] static Mission from_board(std::uint64_t seed, Board board, Setup setup = {});
 
     [[nodiscard]] const Board& board() const noexcept { return board_; }
     [[nodiscard]] std::uint64_t seed() const noexcept { return seed_; }
@@ -137,18 +154,20 @@ public:
     [[nodiscard]] std::vector<Event> take_events();
 
     /// FNV-1a over everything that decides the future: the board, the seed
-    /// (later draws derive from it), the turn, the action states and the
-    /// intents.
+    /// (later draws derive from it), the turn, the action states, the intents
+    /// and the spawn table.
     [[nodiscard]] std::uint64_t state_hash() const noexcept;
 
 private:
-    Mission(std::uint64_t seed, Board board, std::vector<Intent> intents);
+    Mission(std::uint64_t seed, Board board, Setup setup);
 
     [[nodiscard]] std::expected<void, Rejection> check_engineer(UnitId id) const;
     std::expected<void, Rejection> apply_move(const MoveCommand& move);
     std::expected<void, Rejection> apply_shove(const ShoveCommand& shove);
     void apply_end_turn();
     void resolve_attacks();
+    void raise_tide();
+    void spawn_crawlers(int count);
     void plan_crawlers();
     void plan_crawler(UnitId id);
     void emit_damage(UnitId id);
@@ -158,6 +177,7 @@ private:
     int turn_ = 1;
     std::vector<ActionState> actions_; ///< Indexed by UnitId.
     std::vector<Intent> intents_;      ///< Indexed by UnitId.
+    SpawnTable spawns_ = kSpawnTable;
     std::vector<Event> events_;
 };
 

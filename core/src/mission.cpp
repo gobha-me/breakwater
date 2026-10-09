@@ -69,6 +69,30 @@ struct Plan {
 
 using Distances = std::array<int, kTileCount>;
 
+/// Where the next crawler may come ashore, sorted by x: the most inland row
+/// of flooded, empty tiles, or failing that the empty tiles of row 0.
+[[nodiscard]] std::vector<Coord> spawn_tiles(const Board& board) {
+    const auto open = [&board](Coord c) { return board.tile(c).building_hp == 0 && !board.unit_at(c).has_value(); };
+    for (int y = kBoardSize - 1; y >= 0; --y) {
+        std::vector<Coord> row;
+        for (int x = 0; x < kBoardSize; ++x) {
+            if (board.flooded({x, y}) && open({x, y})) {
+                row.push_back({x, y});
+            }
+        }
+        if (!row.empty()) {
+            return row;
+        }
+    }
+    std::vector<Coord> edge;
+    for (int x = 0; x < kBoardSize; ++x) {
+        if (open({x, 0})) {
+            edge.push_back({x, 0});
+        }
+    }
+    return edge;
+}
+
 /// The best plan over every reachable destination and direction, or empty if
 /// no target is in reach. Tiles are visited in key order, so strict-less keeps
 /// the first of equals.
@@ -116,9 +140,9 @@ using Distances = std::array<int, kTileCount>;
 
 } // namespace
 
-Mission::Mission(std::uint64_t seed, Board board, std::vector<Intent> intents)
+Mission::Mission(std::uint64_t seed, Board board, Setup setup)
     : board_{std::move(board)}, seed_{seed}, actions_(board_.unit_count(), ActionState::Ready),
-      intents_{std::move(intents)} {
+      intents_{std::move(setup.intents)}, spawns_{setup.spawns} {
     intents_.resize(board_.unit_count());
 }
 
@@ -138,11 +162,21 @@ Mission Mission::generate(std::uint64_t seed) {
         std::swap(columns.at(i), columns.at(pick));
         (void)board.add_unit(UnitKind::Engineer, {columns.at(i), kDeployRow}, kUnitHp);
     }
-    return Mission{seed, std::move(board), {}};
+
+    // Setup is turn 0: the first crawlers come ashore and telegraph, so turn 1
+    // opens with intents on the board. Setup is not something to animate, so
+    // its events are dropped.
+    Mission mission{seed, std::move(board), {}};
+    mission.turn_ = 0;
+    mission.spawn_crawlers(mission.spawns_.front());
+    mission.plan_crawlers();
+    mission.turn_ = 1;
+    mission.events_.clear();
+    return mission;
 }
 
-Mission Mission::from_board(std::uint64_t seed, Board board, std::vector<Intent> intents) {
-    return Mission{seed, std::move(board), std::move(intents)};
+Mission Mission::from_board(std::uint64_t seed, Board board, Setup setup) {
+    return Mission{seed, std::move(board), std::move(setup)};
 }
 
 ActionState Mission::action_state(UnitId id) const { return actions_.at(id); }
@@ -261,10 +295,14 @@ std::expected<void, Rejection> Mission::apply_shove(const ShoveCommand& shove) {
 }
 
 void Mission::apply_end_turn() {
-    // The enemy phase, in the order docs/RULES.md gives. The tide and spawns
-    // land between the two steps here (#10).
+    // The enemy phase, in the order docs/RULES.md gives. After the last turn
+    // nobody plans for a turn that will never come.
     resolve_attacks();
-    plan_crawlers();
+    raise_tide();
+    if (turn_ < kTurnCount) {
+        spawn_crawlers(spawns_.at(static_cast<std::size_t>(turn_)));
+        plan_crawlers();
+    }
     ++turn_;
     std::ranges::fill(actions_, ActionState::Ready);
     events_.push_back(Event::turn_started(turn_));
@@ -295,6 +333,35 @@ void Mission::resolve_attacks() {
                                .to = at,
                                .value = board_.tile(at).building_hp});
         }
+    }
+}
+
+void Mission::raise_tide() {
+    board_.advance_tide();
+    events_.push_back({.kind = EventKind::TideRose, .unit = 0, .from = {}, .to = {}, .value = board_.tide()});
+    for (UnitId id = 0; id < board_.unit_count(); ++id) {
+        const Unit& u = board_.unit(id);
+        if (u.kind == UnitKind::Engineer && u.alive() && board_.flooded(u.pos)) {
+            board_.damage_unit(id, u.hp);
+            events_.push_back({.kind = EventKind::UnitDrowned, .unit = id, .from = u.pos, .to = u.pos, .value = 0});
+        }
+    }
+}
+
+void Mission::spawn_crawlers(int count) {
+    // One draw per spawn from this turn's stream; candidates are recomputed
+    // after each placement (docs/RULES.md, "Spawns").
+    Rng rng = make_turn_stream(seed_, Stream::Spawns, turn_);
+    for (int i = 0; i < count; ++i) {
+        const auto tiles = spawn_tiles(board_);
+        if (tiles.empty()) {
+            return;
+        }
+        const Coord at = tiles.at(rng.below(static_cast<std::uint32_t>(tiles.size())));
+        const UnitId id = board_.add_unit(UnitKind::Crawler, at, kUnitHp);
+        actions_.push_back(ActionState::Ready);
+        intents_.emplace_back(std::nullopt);
+        events_.push_back({.kind = EventKind::UnitSpawned, .unit = id, .from = at, .to = at, .value = 0});
     }
 }
 
@@ -346,6 +413,9 @@ std::uint64_t Mission::state_hash() const noexcept {
     for (UnitId id = 0; id < intents_.size(); ++id) {
         const Intent i = intent(id);
         detail::fnv_bytes(hash, i ? static_cast<std::uint64_t>(*i) : 0xFFU, 1);
+    }
+    for (const int count : spawns_) {
+        detail::fnv_int(hash, count);
     }
     return hash;
 }

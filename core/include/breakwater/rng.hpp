@@ -58,4 +58,12 @@ enum class Stream : std::uint8_t {
     return Rng::stream(seed, static_cast<std::uint64_t>(stream));
 }
 
+/// One subsystem's stream for one turn (turn 0 is mission setup). Derived, not
+/// stored, so a position needs no generator state and the solver can hash it
+/// cheaply (docs/RULES.md, "RNG streams").
+[[nodiscard]] constexpr Rng make_turn_stream(std::uint64_t seed, Stream stream, int turn) noexcept {
+    Rng base = make_stream(seed, stream);
+    return Rng::stream(base.next(), static_cast<std::uint64_t>(turn));
+}
+
 } // namespace breakwater

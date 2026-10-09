@@ -55,11 +55,14 @@ retreat by.
 | Enemy phase of turns 4, 5 | 0 |
 
 Five crawlers in total. To choose a spawn tile, list the flooded tiles with no
-unit. If that list is empty, list the empty tiles of row 0 instead. Keep only
+unit and no building. If that list is empty, list the empty tiles of row 0
+instead. Keep only
 the tiles in the most inland row of that list, sort them by `x`, and pick one
 with the `Spawns` stream. If no tile qualifies, the spawn is skipped.
 
 Crawlers come ashore at the waterline, so the front advances with the tide.
+When one turn spawns several crawlers, each draw comes from that turn's
+`Spawns` stream in sequence, and the list is rebuilt after every placement.
 
 ## A turn
 
