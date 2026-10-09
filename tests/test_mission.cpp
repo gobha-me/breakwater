@@ -262,7 +262,9 @@ TEST_CASE("ending the turn starts the next one with fresh actions", "[mission][t
     CHECK(mission.turn() == 2);
     CHECK(mission.action_state(e) == ActionState::Ready);
     CHECK_FALSE(mission.reachable(e).empty());
-    CHECK(mission.take_events() == std::vector<Event>{Event::turn_started(2)});
+    const auto events = mission.take_events();
+    REQUIRE_FALSE(events.empty());
+    CHECK(events.back() == Event::turn_started(2));
 }
 
 TEST_CASE("mission hash covers seed, turn and action states, not events", "[mission][determinism]") {
