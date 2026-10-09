@@ -35,36 +35,44 @@ using breakwater::UnitKind;
 
 namespace {
 
-// Three committed missions in tests/logs/, one per ending. Each was recorded
-// from a fixed policy (retreat inland, or stand idle) and is replayed here
-// command by command. The hashes are goldens: after setup, then after every
-// EndTurn. A change to any rule that touches these missions shows up here
-// first; if it is intended, re-record them and say so in the PR.
+// Three committed missions in tests/logs/, one per ending, each recorded from
+// a fixed policy (retreat inland, or stand idle). The golden hashes live in the
+// .hashes file beside each log, in bw_replay's output format, so this test and
+// tools/replay_check.sh share one source of truth. A rule change that touches
+// these missions shows up in both; if it is intended, re-record them with
+// bw_replay and say so in the PR.
 
-// win-seed20.log: retreating inland wins.
-constexpr std::array kWinHashes{
-    0xe0686e3604c15897ULL, 0x77be4fa0eb52373eULL, 0xd0ed6d96136909f2ULL,
-    0xd2394caef7439026ULL, 0xaa8b3c4537b8e140ULL, 0xaa71f5264b4bba09ULL,
-};
-
-// loss-engineers-seed20.log: idling on the beach loses every engineer.
-constexpr std::array kLossByEngineersHashes{
-    0xe0686e3604c15897ULL, 0x182dd175f348f703ULL, 0xae178e5fb0df0fc5ULL, 0x3f0b300763f0df70ULL, 0x38d1ad01dd08c9bbULL,
-};
-
-// loss-town-seed19.log: retreating without a shove loses the town.
-constexpr std::array kLossByTownHashes{
-    0x2c8d468231d068e2ULL, 0xcfa978520b60c47eULL, 0x5a2acca036c6824eULL, 0xae74ee6cce571378ULL, 0x4202565090a422a7ULL,
-};
-
-/// Replays a committed log, requiring every command to be accepted, and
-/// returns the mission and the hash after setup and after each EndTurn.
-std::pair<Mission, std::vector<std::uint64_t>> replay(std::string_view name) {
-    std::ifstream in{std::string{BREAKWATER_LOG_DIR} + "/" + std::string{name}, std::ios::binary};
+std::string read_file(const std::string& name) {
+    std::ifstream in{std::string{BREAKWATER_LOG_DIR} + "/" + name, std::ios::binary};
     REQUIRE(in);
     std::stringstream text;
     text << in.rdbuf();
-    const auto log = breakwater::parse_log(text.str());
+    return text.str();
+}
+
+/// The hashes in a .hashes file: after setup, then after each EndTurn.
+std::vector<std::uint64_t> golden_hashes(const std::string& name) {
+    std::vector<std::uint64_t> hashes;
+    std::istringstream lines{read_file(name)};
+    std::string word;
+    while (lines >> word) {
+        if (word == "start" || word == "end") {
+            if (word == "end") {
+                lines >> word; // The turn number.
+            }
+            std::string hex;
+            lines >> hex;
+            hashes.push_back(std::stoull(hex, nullptr, 16));
+        }
+    }
+    REQUIRE_FALSE(hashes.empty());
+    return hashes;
+}
+
+/// Replays a committed log, requiring every command to be accepted, and
+/// returns the mission and the hash after setup and after each EndTurn.
+std::pair<Mission, std::vector<std::uint64_t>> replay(const std::string& name) {
+    const auto log = breakwater::parse_log(read_file(name));
     REQUIRE(log);
     Mission mission = Mission::generate(log->seed);
     std::vector<std::uint64_t> hashes{mission.state_hash()};
@@ -131,7 +139,7 @@ Mission scenario(const Board& board, std::vector<Intent> intents = {}) {
 
 TEST_CASE("scripted mission: holding the high ground wins", "[outcome][script]") {
     auto [mission, hashes] = replay("win-seed20.log");
-    CHECK(std::ranges::equal(hashes, kWinHashes));
+    CHECK(hashes == golden_hashes("win-seed20.hashes"));
     CHECK(mission.outcome() == Outcome::Won);
     CHECK(mission.turn() == kTurnCount);
     CHECK(any_engineer_alive(mission.board()));
@@ -141,7 +149,7 @@ TEST_CASE("scripted mission: holding the high ground wins", "[outcome][script]")
 
 TEST_CASE("scripted mission: idling on the beach loses every engineer", "[outcome][script]") {
     auto [mission, hashes] = replay("loss-engineers-seed20.log");
-    CHECK(std::ranges::equal(hashes, kLossByEngineersHashes));
+    CHECK(hashes == golden_hashes("loss-engineers-seed20.hashes"));
     CHECK(mission.outcome() == Outcome::Lost);
     CHECK_FALSE(any_engineer_alive(mission.board()));
     CHECK(standing_buildings(mission.board()) > 0);
@@ -150,7 +158,7 @@ TEST_CASE("scripted mission: idling on the beach loses every engineer", "[outcom
 
 TEST_CASE("scripted mission: never shoving loses the town", "[outcome][script]") {
     auto [mission, hashes] = replay("loss-town-seed19.log");
-    CHECK(std::ranges::equal(hashes, kLossByTownHashes));
+    CHECK(hashes == golden_hashes("loss-town-seed19.hashes"));
     CHECK(mission.outcome() == Outcome::Lost);
     CHECK(any_engineer_alive(mission.board()));
     CHECK(standing_buildings(mission.board()) == 0);

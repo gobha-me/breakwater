@@ -10,6 +10,7 @@ gate "clang ASan+UBSan"; cmake --preset asan >/dev/null && cmake --build --prese
 gate "gcc";              cmake --preset gcc >/dev/null && cmake --build --preset gcc && ctest --preset gcc
 gate "clang dev";        cmake --preset dev >/dev/null && cmake --build --preset dev && ctest --preset dev
 gate "clang-tidy";       tools/lint.sh
+gate "replay";           tools/replay_check.sh
 gate "godot smoke";      tools/godot_smoke.sh
 
 printf '\nAll gates passed.\n'
