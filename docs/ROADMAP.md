@@ -12,7 +12,8 @@ not stall; the owner can veto any of them in an issue comment.
 - **Engineer verbs for the slice: Move and Shove only.** A third tool (harpoon
   pull, portable sea wall) is post-slice. Reason: every verb multiplies the
   solver's branching factor, and criterion 4 is a proof obligation, not a
-  nice-to-have.
+  nice-to-have. An engineer may move and then shove in the same turn; see
+  `docs/RULES.md` for why.
 - **Solver rigor: full proof with rejection.** A seed is accepted only when the
   search proves a surviving line. A seed whose search exhausts its node budget
   is reported `unproven` and rejected, never counted as fair.
@@ -22,11 +23,8 @@ not stall; the owner can veto any of them in an issue comment.
 
 ## Phase 0: freeze the rules
 
-`docs/RULES.md` with the exact numbers the tests assert against. Starting
-values: 3 engineers at 2 HP; one action each per turn (move up to 2 orthogonal
-steps **or** shove an adjacent unit); crawlers at 1-2 HP spawning on the sea
-edge; tide +1 per turn; 5 turns; win = at least one building and one engineer
-alive at the end; loss = every engineer dead or every building razed.
+[`docs/RULES.md`](RULES.md) holds the exact numbers the tests assert
+against. It supersedes the starting values sketched here at bootstrap.
 
 *Evidence:* the document, and Phase 1's tests citing it.
 
@@ -42,7 +40,7 @@ alive at the end; loss = every engineer dead or every building razed.
 - Crawler intent: fixed priority (attack an adjacent engineer, else an adjacent
   building, else step toward the nearest building), ties broken by a stated
   ordering, never by unordered iteration.
-- New RNG streams, appended: `Spawns = 3`, `EnemyAi = 4`.
+- New RNG streams, appended: `Deploy = 3`, `Spawns = 4`. The crawler AI uses none.
 - Per-turn RNG is re-derived from `seed` and the turn number rather than stored,
   so `state_hash()` stays small and the solver can hash a position cheaply.
 - Tests lead with edges: shoving a unit into water it cannot survive, intents
