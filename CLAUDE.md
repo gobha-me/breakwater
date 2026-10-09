@@ -61,6 +61,31 @@ owner's pick on a look before polishing it.
 `docs/KNOWN_ISSUES.md`. Notably, Godot 4.7.2 crashes on a first-time headless
 import that discovers the extension; `tools/godot_smoke.sh` works around it.
 
+## Workflow
+
+Work travels one issue at a time, and the loop never pauses for approval except
+at a checkpoint named in `docs/ROADMAP.md`.
+
+1. **Open an issue** before touching code: the outcome, the acceptance criteria,
+   and the evidence that will prove them. Label it with a phase milestone and an
+   `area:` label.
+2. **Branch** from up-to-date `main`, named `<issue-number>-<slug>`. `main`
+   never takes a direct commit.
+3. **Work, test, fix** until `tools/check.sh` passes locally.
+4. **Push and open a PR** that closes the issue (`Closes #N`) and carries the
+   evidence in its body: gate output, replay hashes, capture images.
+5. **Merge on green**: CI green plus the local-only gates (Godot smoke,
+   captures) shown in the PR. Squash merge, delete the branch.
+6. **Next issue.** No idling between issues.
+
+CI runs the gates that need no display: format, ASan and UBSan, GCC, Clang,
+clang-tidy. The Godot smoke test and captures need a Godot binary and a display,
+so they stay local and their output belongs in the PR body.
+
+A decision that comes up mid-issue gets made and recorded in the issue, not
+escalated. Escalate only a checkpoint, or a discovery that invalidates the
+roadmap.
+
 ## Build quick reference
 
 ```sh

@@ -1,0 +1,115 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CLANG_VERSION: "20"
+  GCC_VERSION: "14"
+
+jobs:
+  format:
+    name: clang-format
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install clang-format
+        run: |
+          wget -qO /tmp/llvm.sh https://apt.llvm.org/llvm.sh
+          chmod +x /tmp/llvm.sh
+          sudo /tmp/llvm.sh "$CLANG_VERSION"
+          sudo apt-get install -y "clang-format-$CLANG_VERSION"
+
+      - name: Check formatting
+        env:
+          CLANG_FORMAT: clang-format-20
+        run: tools/format.sh --check
+
+  sanitizers:
+    name: clang ASan+UBSan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Clang and Ninja
+        run: |
+          wget -qO /tmp/llvm.sh https://apt.llvm.org/llvm.sh
+          chmod +x /tmp/llvm.sh
+          sudo /tmp/llvm.sh "$CLANG_VERSION"
+          sudo apt-get install -y ninja-build
+          sudo ln -sf "/usr/bin/clang++-$CLANG_VERSION" /usr/local/bin/clang++
+
+      - name: Configure
+        run: cmake --preset asan
+
+      - name: Build
+        run: cmake --build --preset asan --parallel 4
+
+      - name: Test
+        run: ctest --preset asan
+
+  gcc:
+    name: gcc
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install GCC and Ninja
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y "g++-$GCC_VERSION" ninja-build
+          sudo ln -sf "/usr/bin/g++-$GCC_VERSION" /usr/local/bin/g++
+
+      - name: Configure
+        run: cmake --preset gcc
+
+      - name: Build
+        run: cmake --build --preset gcc --parallel 4
+
+      - name: Test
+        run: ctest --preset gcc
+
+  clang:
+    name: clang, extension and clang-tidy
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Clang tooling and Ninja
+        run: |
+          wget -qO /tmp/llvm.sh https://apt.llvm.org/llvm.sh
+          chmod +x /tmp/llvm.sh
+          sudo /tmp/llvm.sh "$CLANG_VERSION"
+          sudo apt-get install -y "clang-tidy-$CLANG_VERSION" ninja-build
+          sudo ln -sf "/usr/bin/clang++-$CLANG_VERSION" /usr/local/bin/clang++
+
+      - name: Configure
+        run: cmake --preset dev
+
+      # godot-cpp generates its bindings during the build, and clang-tidy needs
+      # those headers to analyse extension/.
+      - name: Build
+        run: cmake --build --preset dev --parallel 4
+
+      - name: Test
+        run: ctest --preset dev
+
+      - name: clang-tidy
+        env:
+          RUN_CLANG_TIDY: run-clang-tidy-20
+        run: tools/lint.sh
