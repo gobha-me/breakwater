@@ -146,9 +146,16 @@ there.
 ## Outcome
 
 - **Loss**, evaluated after every command and every enemy-phase step: every
-  engineer is dead, or every building is razed.
-- **Win**: the enemy phase of turn 5 completes without a loss.
-- Once the mission has ended, every command is rejected and changes nothing.
+  engineer is dead, or every building is razed. The mission ends on the spot:
+  the rest of the enemy phase does not run, and the turn does not advance.
+- **Win**: the enemy phase of turn 5 completes without a loss. The turn stays
+  at 5; no sixth turn is announced.
+- Once the mission has ended, every command is rejected and changes nothing,
+  and no crawler holds an intent.
+
+A hand-built scenario with no buildings cannot be lost by razing them, and one
+with no engineers cannot be lost by losing them. Neither can be created during
+a mission, so this never applies to a generated one, which always has both.
 
 ## RNG streams
 

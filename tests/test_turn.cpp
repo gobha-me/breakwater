@@ -76,6 +76,9 @@ Coord expected_spawn(std::uint64_t seed, int turn, const std::vector<Coord>& can
 /// A fixed, legal policy for replay tests: each living engineer retreats to its
 /// most inland reachable tile (lowest x on ties), then the turn ends.
 void retreat_and_end_turn(Mission& mission) {
+    if (mission.outcome() != breakwater::Outcome::InProgress) {
+        return;
+    }
     for (UnitId id = 0; id < kEngineerCount; ++id) {
         const auto tiles = mission.reachable(id);
         if (tiles.empty()) {
@@ -241,14 +244,16 @@ TEST_CASE("the last turn runs attacks and the tide, then nothing plans", "[turn]
     CHECK_FALSE(mission.intent(c).has_value());
 }
 
-TEST_CASE("generated missions survive five idle turns without breaking a rule", "[turn][soak]") {
+TEST_CASE("generated missions run five idle turns to an ending without breaking a rule", "[turn][soak]") {
     for (std::uint64_t seed = 0; seed < 200; ++seed) {
         Mission mission = Mission::generate(seed);
-        for (int turn = 0; turn < breakwater::kTurnCount; ++turn) {
+        for (int turn = 0; turn < breakwater::kTurnCount && mission.outcome() == breakwater::Outcome::InProgress;
+             ++turn) {
             REQUIRE(mission.apply(EndTurnCommand{}));
         }
+        REQUIRE(mission.outcome() != breakwater::Outcome::InProgress);
         const Board& board = mission.board();
-        REQUIRE(board.tide() == breakwater::kStartTide + breakwater::kTurnCount);
+        REQUIRE(board.tide() <= breakwater::kStartTide + breakwater::kTurnCount);
         REQUIRE(board.unit_count() <= kEngineerCount + 5);
         for (UnitId id = 0; id < board.unit_count(); ++id) {
             const auto& u = board.unit(id);
@@ -268,6 +273,7 @@ TEST_CASE("the same commands from the same seed give the same hash every turn", 
                 retreat_and_end_turn(mission);
                 hashes.push_back(mission.state_hash());
             }
+            REQUIRE(mission.outcome() != breakwater::Outcome::InProgress);
             return hashes;
         };
         REQUIRE(play() == play());

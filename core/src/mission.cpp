@@ -144,6 +144,12 @@ Mission::Mission(std::uint64_t seed, Board board, Setup setup)
     : board_{std::move(board)}, seed_{seed}, actions_(board_.unit_count(), ActionState::Ready),
       intents_{std::move(setup.intents)}, spawns_{setup.spawns} {
     intents_.resize(board_.unit_count());
+    for (UnitId id = 0; id < board_.unit_count(); ++id) {
+        has_engineers_ = has_engineers_ || board_.unit(id).kind == UnitKind::Engineer;
+    }
+    for (std::size_t i = 0; i < kTileCount; ++i) {
+        has_town_ = has_town_ || board_.tile(tile_coord(i)).building_hp > 0;
+    }
 }
 
 Mission Mission::generate(std::uint64_t seed) {
@@ -201,11 +207,18 @@ std::vector<Coord> Mission::reachable(UnitId engineer) const {
 }
 
 std::expected<void, Rejection> Mission::apply(const Command& command) {
+    if (outcome_ != Outcome::InProgress) {
+        return std::unexpected{Rejection::MissionOver};
+    }
     if (const auto* move = std::get_if<MoveCommand>(&command)) {
         return apply_move(*move);
     }
     if (const auto* shove = std::get_if<ShoveCommand>(&command)) {
-        return apply_shove(*shove);
+        auto result = apply_shove(*shove);
+        if (result) {
+            (void)check_loss(); // A shove can drown the last engineer or raze the last building.
+        }
+        return result;
     }
     apply_end_turn();
     return {};
@@ -295,17 +308,49 @@ std::expected<void, Rejection> Mission::apply_shove(const ShoveCommand& shove) {
 }
 
 void Mission::apply_end_turn() {
-    // The enemy phase, in the order docs/RULES.md gives. After the last turn
-    // nobody plans for a turn that will never come.
+    // The enemy phase, in the order docs/RULES.md gives. A loss ends it on the
+    // spot. After the last turn nobody plans for a turn that will never come.
     resolve_attacks();
-    raise_tide();
-    if (turn_ < kTurnCount) {
-        spawn_crawlers(spawns_.at(static_cast<std::size_t>(turn_)));
-        plan_crawlers();
+    if (check_loss()) {
+        return;
     }
+    raise_tide();
+    if (check_loss()) {
+        return;
+    }
+    if (turn_ == kTurnCount) {
+        end(Outcome::Won);
+        return;
+    }
+    spawn_crawlers(spawns_.at(static_cast<std::size_t>(turn_)));
+    plan_crawlers();
     ++turn_;
     std::ranges::fill(actions_, ActionState::Ready);
     events_.push_back(Event::turn_started(turn_));
+}
+
+bool Mission::check_loss() {
+    bool engineer_alive = false;
+    for (UnitId id = 0; id < board_.unit_count(); ++id) {
+        const Unit& u = board_.unit(id);
+        engineer_alive = engineer_alive || (u.kind == UnitKind::Engineer && u.alive());
+    }
+    bool building_standing = false;
+    for (std::size_t i = 0; i < kTileCount; ++i) {
+        building_standing = building_standing || board_.tile(tile_coord(i)).building_hp > 0;
+    }
+    if ((has_engineers_ && !engineer_alive) || (has_town_ && !building_standing)) {
+        end(Outcome::Lost);
+        return true;
+    }
+    return false;
+}
+
+void Mission::end(Outcome outcome) {
+    outcome_ = outcome;
+    std::ranges::fill(intents_, std::nullopt);
+    events_.push_back(
+        {.kind = EventKind::MissionEnded, .unit = 0, .from = {}, .to = {}, .value = static_cast<int>(outcome)});
 }
 
 void Mission::resolve_attacks() {
@@ -417,6 +462,7 @@ std::uint64_t Mission::state_hash() const noexcept {
     for (const int count : spawns_) {
         detail::fnv_int(hash, count);
     }
+    detail::fnv_bytes(hash, static_cast<std::uint64_t>(outcome_), 1);
     return hash;
 }
 
