@@ -1,69 +1,150 @@
 extends Node3D
-## Placeholder diorama: draws the core board as stepped tiles so the
-## C++ -> Godot path is visible end to end. Meshy assets replace the boxes later.
+## Breakwater's main scene. The mission and every rule live in the extension;
+## this script plays the mission's events back as animation and keeps the
+## views in sync with the mission's queries.
+##
+## User arguments (after `--`):
+##   --seed=<n>          start a fresh mission from this seed
+##   --log=<path>        start from the position a log reaches
+##   --autoplay=<path>   play a log's commands one by one through the scene,
+##                       print the outcome and hash, and quit
+##   --speed=<x>         playback speed multiplier (autoplay defaults to 8)
 
-const TILE := 1.0
-const BASE_HEIGHT := 0.2
-const STEP_HEIGHT := 0.15  # Elevation runs 0-8 (docs/RULES.md): keep the beach low.
+signal playback_finished
 
-@export var board_seed := 42
-@export var tide_steps := 1
+const BoardView := preload("res://scripts/board_view.gd")
+const UnitsView := preload("res://scripts/units_view.gd")
+const Hud := preload("res://scripts/hud.gd")
 
-var board: BreakwaterBoard
+@export var mission_seed := 20
+
+var mission := BreakwaterMission.new()
+var board: BoardView
+var units: UnitsView
+var hud: Hud
+var playing := false
 
 
 func _ready() -> void:
-	board = BreakwaterBoard.new()
-	board.generate(board_seed)
-	for _i in tide_steps:
-		board.advance_tide()
-	_build_tiles()
-	_build_water()
+	board = BoardView.new()
+	units = UnitsView.new()
+	hud = Hud.new()
+	add_child(board)
+	add_child(units)
+	add_child(hud)
 	_build_environment()
 
-
-func _tile_top(elevation: int) -> float:
-	return BASE_HEIGHT + elevation * STEP_HEIGHT
-
-
-func _build_tiles() -> void:
-	var size := board.get_size()
-	for y in size:
-		for x in size:
-			var elevation := board.get_elevation(x, y)
-			var height := _tile_top(elevation)
-			var tile := _box(Vector3(TILE * 0.95, height, TILE * 0.95), _tile_color(elevation))
-			tile.position = Vector3(x * TILE, height * 0.5, y * TILE)
-			add_child(tile)
-			if board.get_building_hp(x, y) > 0:
-				var house := _box(Vector3(0.55, 0.6, 0.55), Color(0.78, 0.42, 0.32))
-				house.position = Vector3(x * TILE, height + 0.3, y * TILE)
-				add_child(house)
+	var args := _user_args()
+	Engine.time_scale = float(args.get("speed", "8" if args.has("autoplay") else "1"))
+	if args.has("log"):
+		var err := mission.load_log(FileAccess.get_file_as_string(args["log"]))
+		if not err.is_empty():
+			push_error("log: " + err)
+	else:
+		mission.generate(int(args.get("seed", str(mission_seed))))
+	_rebuild()
+	if args.has("autoplay"):
+		# Real-time watchdog: a script error mid-autoplay must fail the run,
+		# not leave a headless process waiting forever.
+		get_tree().create_timer(120.0, true, false, true).timeout.connect(func() -> void:
+			printerr("autoplay: timed out")
+			get_tree().quit(3))
+		_autoplay.call_deferred(args["autoplay"])
 
 
-func _build_water() -> void:
-	# Flooded means elevation < tide, so the surface sits half a step below the
-	# first dry level: flooded tiles are covered, dry ones stand clear.
-	var water := MeshInstance3D.new()
-	var plane := PlaneMesh.new()
-	var extent := board.get_size() * TILE + 6.0
-	plane.size = Vector2(extent, extent)
-	water.mesh = plane
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(0.15, 0.4, 0.65, 0.75)
-	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	water.material_override = mat
-	var center := (board.get_size() - 1) * TILE * 0.5
-	water.position = Vector3(center, BASE_HEIGHT + (board.get_tide() - 0.5) * STEP_HEIGHT, center)
-	add_child(water)
+func _rebuild() -> void:
+	board.build(mission)
+	units.build(board)
+	_sync()
+
+
+## Everything on screen, from queries: the source of truth after any animation.
+func _sync() -> void:
+	board.sync()
+	units.sync(mission)
+	hud.sync(mission)
+
+
+## Plays back everything the mission reported since the last call, in order,
+## then re-syncs. Input should wait for playback_finished.
+func play_events() -> void:
+	playing = true
+	for e in mission.take_events():
+		await _play(e)
+	_sync()
+	playing = false
+	playback_finished.emit()
+
+
+func _play(e: Dictionary) -> void:
+	var id: int = e["unit"]
+	var to := board.top_of(e["to"])
+	var tween: Tween = null
+	match int(e["kind"]):
+		BreakwaterMission.EVENT_UNIT_MOVED:
+			tween = units.tween_to(id, to, 0.25)
+		BreakwaterMission.EVENT_UNIT_SHOVED:
+			tween = units.tween_to(id, to, 0.15) if e["from"] != e["to"] else null
+		BreakwaterMission.EVENT_UNIT_DAMAGED:
+			tween = units.tween_flash(id, e["value"])
+		BreakwaterMission.EVENT_UNIT_DIED:
+			tween = units.tween_die(id)
+		BreakwaterMission.EVENT_UNIT_DROWNED:
+			tween = units.tween_sink(id)
+		BreakwaterMission.EVENT_BUILDING_DAMAGED:
+			tween = board.flash_building(e["to"], e["value"])
+		BreakwaterMission.EVENT_ATTACK_RESOLVED:
+			tween = units.tween_bump(id, to)
+		BreakwaterMission.EVENT_TIDE_ROSE:
+			tween = board.tween_tide(e["value"], 0.5)
+		BreakwaterMission.EVENT_UNIT_SPAWNED:
+			tween = units.tween_spawn(id, false, to)
+		BreakwaterMission.EVENT_TURN_STARTED, BreakwaterMission.EVENT_MISSION_ENDED:
+			hud.sync(mission)
+		BreakwaterMission.EVENT_INTENT_DECLARED:
+			pass  # Strikes are drawn by the sync after playback.
+	if tween != null:
+		await tween.finished
+
+
+## Runs a log through the scene exactly as a player's commands would go, so
+## the presentation is exercised headless. Prints the result and quits.
+func _autoplay(path: String) -> void:
+	var parsed := BreakwaterMission.parse_log(FileAccess.get_file_as_string(path))
+	if not parsed["error"].is_empty():
+		printerr("autoplay: %s: %s" % [path, parsed["error"]])
+		get_tree().quit(2)
+		return
+	mission.generate(parsed["seed"])
+	_rebuild()
+	var index := 0
+	for c in parsed["commands"]:
+		index += 1
+		var err: String
+		match c["verb"]:
+			"move":
+				err = mission.move(c["engineer"], c["x"], c["y"])
+			"shove":
+				err = mission.shove(c["engineer"], c["dir"])
+			_:
+				err = mission.end_turn()
+		if not err.is_empty():
+			printerr("autoplay: command %d refused: %s" % [index, err])
+			get_tree().quit(1)
+			return
+		await play_events()
+	var outcome: String = {BreakwaterMission.OUTCOME_WON: "won", BreakwaterMission.OUTCOME_LOST: "lost"}.get(
+			mission.get_outcome(), "in-progress")
+	print("autoplay: %d commands, outcome %s, hash %s" % [index, outcome, mission.get_state_hash_hex()])
+	get_tree().quit(0)
 
 
 func _build_environment() -> void:
-	var center := (board.get_size() - 1) * TILE * 0.5
+	var center := Vector3(3.5, 0.0, 3.5)
 	var camera := Camera3D.new()
-	camera.position = Vector3(center, 9.0, center + 9.0)
+	camera.position = center + Vector3(0.0, 9.0, 8.5)
 	add_child(camera)
-	camera.look_at(Vector3(center, 0.0, center + 0.5))
+	camera.look_at(center + Vector3(0.0, 0.0, 0.5))
 
 	var sun := DirectionalLight3D.new()
 	sun.rotation_degrees = Vector3(-50.0, -30.0, 0.0)
@@ -80,19 +161,10 @@ func _build_environment() -> void:
 	add_child(world)
 
 
-func _tile_color(elevation: int) -> Color:
-	var palette := [Color(0.85, 0.78, 0.55), Color(0.82, 0.76, 0.54), Color(0.75, 0.72, 0.5),
-			Color(0.6, 0.66, 0.42), Color(0.45, 0.62, 0.35), Color(0.4, 0.58, 0.32),
-			Color(0.38, 0.55, 0.3), Color(0.45, 0.5, 0.4), Color(0.5, 0.5, 0.45)]
-	return palette[clampi(elevation, 0, palette.size() - 1)]
-
-
-func _box(size: Vector3, color: Color) -> MeshInstance3D:
-	var instance := MeshInstance3D.new()
-	var mesh := BoxMesh.new()
-	mesh.size = size
-	instance.mesh = mesh
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = color
-	instance.material_override = mat
-	return instance
+static func _user_args() -> Dictionary:
+	var args := {}
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--") and "=" in arg:
+			var key := arg.substr(2, arg.find("=") - 2)
+			args[key] = arg.substr(arg.find("=") + 1)
+	return args

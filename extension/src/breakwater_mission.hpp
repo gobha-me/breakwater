@@ -5,6 +5,7 @@
 
 #include <godot_cpp/classes/ref_counted.hpp>
 #include <godot_cpp/variant/array.hpp>
+#include <godot_cpp/variant/dictionary.hpp>
 #include <godot_cpp/variant/string.hpp>
 #include <godot_cpp/variant/typed_array.hpp>
 #include <godot_cpp/variant/vector2i.hpp>
@@ -59,6 +60,11 @@ public:
     /// error with its line, or the first refused command. Events from the
     /// replay are dropped: the scene builds the position from queries.
     godot::String load_log(const godot::String& text);
+
+    /// Parses a log's text without applying it, so a scene can step through
+    /// it: {error: String, seed: int, commands: [{verb, engineer, x, y, dir}]}.
+    /// `error` is "" on success; unused fields are 0.
+    [[nodiscard]] static godot::Dictionary parse_log(const godot::String& text);
 
     godot::String move(int64_t engineer, int64_t x, int64_t y);
     godot::String shove(int64_t engineer, int64_t dir);

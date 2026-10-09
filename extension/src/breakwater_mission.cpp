@@ -73,7 +73,7 @@ void BreakwaterMission::generate(int64_t seed) {
 }
 
 godot::String BreakwaterMission::load_log(const godot::String& text) {
-    const auto parsed = parse_log(to_std(text));
+    const auto parsed = breakwater::parse_log(to_std(text));
     if (!parsed) {
         return to_godot(std::format("line {}: {}", parsed.error().line, parsed.error().message));
     }
@@ -87,6 +87,39 @@ godot::String BreakwaterMission::load_log(const godot::String& text) {
     }
     (void)mission_.take_events();
     return {};
+}
+
+godot::Dictionary BreakwaterMission::parse_log(const godot::String& text) {
+    godot::Dictionary out;
+    godot::Array commands;
+    const auto parsed = breakwater::parse_log(to_std(text));
+    out["error"] =
+        parsed ? godot::String{} : to_godot(std::format("line {}: {}", parsed.error().line, parsed.error().message));
+    out["seed"] = parsed ? std::bit_cast<int64_t>(parsed->seed) : int64_t{0};
+    if (parsed) {
+        for (const Command& command : parsed->commands) {
+            godot::Dictionary d;
+            d["engineer"] = int64_t{0};
+            d["x"] = 0;
+            d["y"] = 0;
+            d["dir"] = int64_t{0};
+            if (const auto* move = std::get_if<MoveCommand>(&command)) {
+                d["verb"] = "move";
+                d["engineer"] = static_cast<int64_t>(move->engineer);
+                d["x"] = move->to.x;
+                d["y"] = move->to.y;
+            } else if (const auto* shove = std::get_if<ShoveCommand>(&command)) {
+                d["verb"] = "shove";
+                d["engineer"] = static_cast<int64_t>(shove->engineer);
+                d["dir"] = static_cast<int64_t>(shove->dir);
+            } else {
+                d["verb"] = "end";
+            }
+            commands.push_back(d);
+        }
+    }
+    out["commands"] = commands;
+    return out;
 }
 
 godot::String BreakwaterMission::apply(const Command& command) {
@@ -202,6 +235,7 @@ void BreakwaterMission::_bind_methods() {
     using godot::D_METHOD;
     ClassDB::bind_method(D_METHOD("generate", "seed"), &BreakwaterMission::generate);
     ClassDB::bind_method(D_METHOD("load_log", "text"), &BreakwaterMission::load_log);
+    ClassDB::bind_static_method("BreakwaterMission", D_METHOD("parse_log", "text"), &BreakwaterMission::parse_log);
     ClassDB::bind_method(D_METHOD("move", "engineer", "x", "y"), &BreakwaterMission::move);
     ClassDB::bind_method(D_METHOD("shove", "engineer", "dir"), &BreakwaterMission::shove);
     ClassDB::bind_method(D_METHOD("end_turn"), &BreakwaterMission::end_turn);
