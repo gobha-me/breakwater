@@ -1,0 +1,5 @@
+/build/
+/build-*.log
+/captures/
+/game/.godot/
+/game/bin/*.so

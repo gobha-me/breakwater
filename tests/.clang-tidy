@@ -1,0 +1,10 @@
+---
+InheritParentConfig: true
+# Catch2's assertion decomposer reads as a chained comparison, and its
+# TEST_CASE macros expand to functions with internal complexity. Catch2's
+# internal ResultDisposition flags combine enum values the analyzer rejects.
+Checks: >
+  -bugprone-chained-comparison,
+  -readability-function-cognitive-complexity,
+  -cppcoreguidelines-avoid-do-while,
+  -clang-analyzer-optin.core.EnumCastOutOfRange

@@ -1,0 +1,42 @@
+---
+# Broad families on, with exclusions limited to checks that are pure style
+# preference or that misfire on test-assertion and godot-cpp macros. Every
+# exclusion carries its reason.
+Checks: >
+  -*,
+  bugprone-*,
+  clang-analyzer-*,
+  concurrency-*,
+  cppcoreguidelines-pro-type-member-init,
+  cppcoreguidelines-slicing,
+  cppcoreguidelines-special-member-functions,
+  cppcoreguidelines-virtual-class-destructor,
+  misc-*,
+  modernize-*,
+  performance-*,
+  portability-*,
+  readability-*,
+  -bugprone-easily-swappable-parameters,
+  -misc-static-assert,
+  -modernize-use-designated-initializers,
+  -portability-avoid-pragma-once,
+  -misc-include-cleaner,
+  -misc-non-private-member-variables-in-classes,
+  -modernize-use-trailing-return-type,
+  -modernize-use-nodiscard,
+  -readability-identifier-length,
+  -readability-magic-numbers,
+  -readability-uppercase-literal-suffix
+# easily-swappable-parameters: (x, y) coordinate pairs are the domain.
+# static-assert: clang-tidy 22 flags runtime asserts on constexpr predicates.
+# use-designated-initializers: positional {x, y} is the clearer idiom for coordinates.
+# avoid-pragma-once: supported by every compiler this project targets.
+# include-cleaner: misreports godot-cpp umbrella headers.
+# non-private-member-variables: plain aggregates (Coord, Tile, Unit) are intentional.
+# use-trailing-return-type, use-nodiscard, identifier-length,
+# magic-numbers, uppercase-literal-suffix: style only; reviewed by humans instead.
+WarningsAsErrors: '*'
+HeaderFilterRegex: '.*/breakwater/(core|extension|tests)/.*'
+CheckOptions:
+  - key: readability-function-cognitive-complexity.Threshold
+    value: 25
