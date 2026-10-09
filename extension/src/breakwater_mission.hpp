@@ -56,6 +56,10 @@ public:
     static constexpr int64_t EVENT_MISSION_ENDED = 11;
 
     void generate(int64_t seed);
+    /// Whether the game offers `seed`: in range and proven winnable.
+    [[nodiscard]] static bool is_offered(int64_t seed);
+    /// The next offered seed after `seed`, wrapping.
+    [[nodiscard]] static int64_t next_offered(int64_t seed);
     /// Replays a mission log from its text. Returns "" or the error: a parse
     /// error with its line, or the first refused command. Events from the
     /// replay are dropped: the scene builds the position from queries.

@@ -1,5 +1,7 @@
 #include "breakwater_mission.hpp"
 
+#include "breakwater/seeds.hpp"
+
 #include <godot_cpp/core/class_db.hpp>
 #include <godot_cpp/variant/dictionary.hpp>
 
@@ -70,6 +72,14 @@ void BreakwaterMission::generate(int64_t seed) {
     const auto core_seed = std::bit_cast<std::uint64_t>(seed);
     mission_ = Mission::generate(core_seed);
     log_ = MissionLog{.seed = core_seed, .commands = {}};
+}
+
+bool BreakwaterMission::is_offered(int64_t seed) {
+    return seed >= 0 && breakwater::is_offered(static_cast<std::uint64_t>(seed));
+}
+
+int64_t BreakwaterMission::next_offered(int64_t seed) {
+    return static_cast<int64_t>(breakwater::next_offered(seed < 0 ? 0 : static_cast<std::uint64_t>(seed)));
 }
 
 godot::String BreakwaterMission::load_log(const godot::String& text) {
@@ -235,6 +245,9 @@ void BreakwaterMission::_bind_methods() {
     using godot::D_METHOD;
     ClassDB::bind_method(D_METHOD("generate", "seed"), &BreakwaterMission::generate);
     ClassDB::bind_method(D_METHOD("load_log", "text"), &BreakwaterMission::load_log);
+    ClassDB::bind_static_method("BreakwaterMission", D_METHOD("is_offered", "seed"), &BreakwaterMission::is_offered);
+    ClassDB::bind_static_method("BreakwaterMission", D_METHOD("next_offered", "seed"),
+                                &BreakwaterMission::next_offered);
     ClassDB::bind_static_method("BreakwaterMission", D_METHOD("parse_log", "text"), &BreakwaterMission::parse_log);
     ClassDB::bind_method(D_METHOD("move", "engineer", "x", "y"), &BreakwaterMission::move);
     ClassDB::bind_method(D_METHOD("shove", "engineer", "dir"), &BreakwaterMission::shove);

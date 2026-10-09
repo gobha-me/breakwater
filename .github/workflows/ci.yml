@@ -86,7 +86,7 @@ jobs:
         run: ctest --preset gcc
 
   replay:
-    name: replay determinism
+    name: replay determinism and seed proofs
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
@@ -105,6 +105,9 @@ jobs:
       # Clang presets but never compiled here.
       - name: Replay every committed log under Clang and GCC, debug and release
         run: tools/replay_check.sh
+
+      - name: Prove every offered seed winnable; rejected list must match
+        run: tools/seeds_check.sh
 
   clang:
     name: clang, extension and clang-tidy

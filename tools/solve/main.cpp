@@ -3,6 +3,10 @@
 //   bw_solve <seed> [--budget N] [--no-shove]
 //       The verdict, the node count, and for a winnable mission its witness:
 //       a log that bw_replay replays to a win.
+//   bw_solve --check-offered
+//       Re-runs the proof sweep over the offered seeds at kProofBudget and
+//       fails unless the seeds it cannot prove are exactly kRejectedSeeds,
+//       and every witness wins (concept criterion 4).
 //   bw_solve --range A-B [--budget N] [--no-shove]
 //       One line per seed (seed, verdict, nodes, milliseconds), then a
 //       summary. Witnesses are replayed in-process; a witness that does not
@@ -12,6 +16,7 @@
 
 #include "breakwater/log.hpp"
 #include "breakwater/mission.hpp"
+#include "breakwater/seeds.hpp"
 #include "breakwater/solver.hpp"
 
 #include <algorithm>
@@ -103,6 +108,28 @@ int solve_range(std::uint64_t first, std::uint64_t last, SolveOptions options) {
     return bad_witnesses == 0 ? 0 : 1;
 }
 
+int check_offered() {
+    int mismatches = 0;
+    std::size_t proven = 0;
+    for (std::uint64_t seed = 0; seed < breakwater::kOfferedSeeds; ++seed) {
+        const auto result = breakwater::solve(Mission::generate(seed), {.node_budget = breakwater::kProofBudget});
+        const bool winnable = result.verdict == Verdict::Winnable;
+        if (winnable && !witness_wins(seed, result)) {
+            std::cout << std::format("seed {}: witness does not win\n", seed);
+            ++mismatches;
+        } else if (winnable != breakwater::is_offered(seed)) {
+            std::cout << std::format("seed {}: solver says {}, kRejectedSeeds says {}\n", seed,
+                                     verdict_name(result.verdict),
+                                     breakwater::is_offered(seed) ? "offered" : "rejected");
+            ++mismatches;
+        }
+        proven += winnable ? 1 : 0;
+    }
+    std::cout << std::format("offered seeds: {} proven with replayed witnesses, {} rejected, {} mismatch(es)\n", proven,
+                             breakwater::kRejectedSeeds.size(), mismatches);
+    return mismatches == 0 ? 0 : 1;
+}
+
 int run(std::span<char*> args) {
     SolveOptions options;
     std::optional<std::uint64_t> seed;
@@ -110,6 +137,9 @@ int run(std::span<char*> args) {
     for (std::size_t i = 1; i < args.size(); ++i) {
         const std::string_view arg = args[i];
         const bool has_value = i + 1 < args.size();
+        if (arg == "--check-offered") {
+            return check_offered();
+        }
         if (arg == "--budget" && has_value) {
             const auto v = number(args[++i]);
             if (!v) {
@@ -148,7 +178,7 @@ int main(int argc, char** argv) {
     try {
         const int status = run(std::span(argv, static_cast<std::size_t>(argc)));
         if (status == 2) {
-            std::cerr << "usage: bw_solve <seed> | --range A-B  [--budget N] [--no-shove]\n";
+            std::cerr << "usage: bw_solve <seed> | --range A-B | --check-offered  [--budget N] [--no-shove]\n";
         }
         return status;
     } catch (const std::exception& e) {

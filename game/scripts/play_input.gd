@@ -170,7 +170,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			KEY_R:
 				main.restart(main.mission.get_seed())
 			KEY_N:
-				main.restart(main.mission.get_seed() + 1)
+				main.next_mission()
 			KEY_F5:
 				main.save_log()
 

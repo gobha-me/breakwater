@@ -63,6 +63,11 @@ func _run_mission_checks() -> void:
 			and events[0]["to"] == to, "the move is reported as an event")
 	_check(fresh.get_units()[0]["action"] == BreakwaterMission.ACTION_MOVED, "engineer 0 has moved")
 	_check(fresh.get_log().ends_with("move 0 %d %d\n" % [to.x, to.y]), "accepted commands are recorded")
+	_check(BreakwaterMission.is_offered(20) and not BreakwaterMission.is_offered(78)
+			and not BreakwaterMission.is_offered(1000) and not BreakwaterMission.is_offered(-1),
+			"offered seeds: proven ones in 0-999 only")
+	_check(BreakwaterMission.next_offered(77) == 79 and BreakwaterMission.next_offered(999) == 0,
+			"next offered seed skips rejected ones and wraps")
 	_check(fresh.load_log("breakwater-log 1\nseed 1\nfly 0\n") == "line 3: unknown command 'fly'",
 			"malformed log reported with its line")
 
