@@ -9,12 +9,14 @@ extends Node3D
 ##   --autoplay=<path>   play a log's commands one by one through the scene,
 ##                       print the outcome and hash, and quit
 ##   --speed=<x>         playback speed multiplier (autoplay defaults to 8)
+##   --save-dir=<path>   where F5 saves logs (default user://logs)
 
 signal playback_finished
 
 const BoardView := preload("res://scripts/board_view.gd")
 const UnitsView := preload("res://scripts/units_view.gd")
 const Hud := preload("res://scripts/hud.gd")
+const PlayInput := preload("res://scripts/play_input.gd")
 
 @export var mission_seed := 20
 
@@ -22,7 +24,9 @@ var mission := BreakwaterMission.new()
 var board: BoardView
 var units: UnitsView
 var hud: Hud
+var input: PlayInput
 var playing := false
+var save_dir := "user://logs"
 
 
 func _ready() -> void:
@@ -33,8 +37,12 @@ func _ready() -> void:
 	add_child(units)
 	add_child(hud)
 	_build_environment()
+	input = PlayInput.new()
+	add_child(input)
+	input.setup(self)
 
 	var args := _user_args()
+	save_dir = args.get("save-dir", save_dir)
 	Engine.time_scale = float(args.get("speed", "8" if args.has("autoplay") else "1"))
 	if args.has("log"):
 		var err := mission.load_log(FileAccess.get_file_as_string(args["log"]))
@@ -56,6 +64,36 @@ func _rebuild() -> void:
 	board.build(mission)
 	units.build(board)
 	_sync()
+	input.selected = -1
+	input.refresh()
+
+
+## A fresh mission from `seed`, discarding the current one.
+func restart(seed: int) -> void:
+	if playing:
+		return
+	mission = BreakwaterMission.new()
+	mission.generate(seed)
+	_rebuild()
+	hud.say("Seed %d." % seed)
+
+
+## Writes every accepted command so far as a log bw_replay can replay, and
+## returns its absolute path ("" on failure).
+func save_log() -> String:
+	DirAccess.make_dir_recursive_absolute(save_dir)
+	var path := save_dir.path_join("breakwater-seed%d-turn%d-%d.log" % [
+			mission.get_seed(), mission.get_turn(), Time.get_unix_time_from_system()])
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	if file == null:
+		hud.say("Could not save %s." % path)
+		return ""
+	file.store_string(mission.get_log())
+	file.close()
+	var absolute := ProjectSettings.globalize_path(path)
+	hud.say("Saved %s" % absolute)
+	print("saved: ", absolute)
+	return absolute
 
 
 ## Everything on screen, from queries: the source of truth after any animation.
