@@ -8,6 +8,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <fstream>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -202,14 +203,16 @@ TEST_CASE("a loss ends the enemy phase on the spot", "[outcome][loss]") {
         CHECK(mission.board().unit_count() == 1); // No spawn after the loss.
     }
 
-    SECTION("a shove razes the last building: lost before the turn ends") {
+    SECTION("a shove razes the last building: lost before the turn ends, intents cleared") {
         Board board = flat_board();
         const auto e = board.add_unit(UnitKind::Engineer, {3, 4}, 2);
-        (void)board.add_unit(UnitKind::Crawler, {3, 3}, 2);
+        const auto c = board.add_unit(UnitKind::Crawler, {3, 3}, 2);
         add_building(board, {3, 2}, 1);
-        Mission mission = scenario(board);
+        Mission mission = scenario(board, {std::nullopt, Intent{Direction::East}});
+        REQUIRE(mission.intent(c).has_value());
         REQUIRE(mission.apply(ShoveCommand{.engineer = e, .dir = Direction::North}));
         CHECK(mission.outcome() == Outcome::Lost);
+        CHECK_FALSE(mission.intent(c).has_value()); // The only ending that comes before attacks clear them.
         require_over(mission);
     }
 }
