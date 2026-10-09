@@ -11,6 +11,7 @@ var _status: Label
 var _engineers: Label
 var _message: Label
 var _banner: Label
+var _hints: Label
 
 
 func _ready() -> void:
@@ -28,6 +29,17 @@ func _ready() -> void:
 	_engineers = _label(column, 18)
 	_message = _label(column, 16)
 	_message.modulate = Color(1, 0.8, 0.5)
+
+	_hints = Label.new()
+	_hints.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+	_hints.offset_top = -40
+	_hints.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_hints.add_theme_font_size_override("font_size", 16)
+	_hints.add_theme_constant_override("outline_size", 6)
+	_hints.add_theme_color_override("font_outline_color", Color(0, 0, 0))
+	_hints.text = ("Click an engineer   ·   green: move   ·   orange or WASD: shove   ·   Space: end turn"
+			+ "   ·   Tab / Esc   ·   R restart   ·   N next seed   ·   F5 save")
+	add_child(_hints)
 
 	_banner = Label.new()
 	_banner.set_anchors_and_offsets_preset(Control.PRESET_CENTER)

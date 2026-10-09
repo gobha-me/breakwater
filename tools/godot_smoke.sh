@@ -32,4 +32,26 @@ for log in tests/logs/*.log; do
         echo "  FAIL autoplay $log: expected $outcome $expected"; tail -3 <<<"$out"; status=1
     fi
 done
+
+# Input: play whole missions with injected mouse clicks and keys, save each
+# game the way F5 does, and require bw_replay to reach the hash the game showed.
+replay="build/dev/tools/replay/bw_replay"
+mkdir -p build && played="$(mktemp -d "$PWD/build/played.XXXXXX")"
+trap 'rm -rf "$played"' EXIT
+out="$(timeout 300 "$GODOT" --headless --path game --script res://tests/input_test.gd -- \
+    --save-dir="$played" --seeds=20,19 --play-logs="$PWD/tests/logs/win-seed20.log" 2>&1)" || status=1
+grep -E '^  (ok|FAIL)|^input:' <<<"$out" || true
+if grep -qE 'SCRIPT ERROR|^ERROR' <<<"$out" || ! grep -q '^input: PASS' <<<"$out"; then
+    echo "  FAIL input test did not pass:"; grep -E 'SCRIPT ERROR|^ERROR|FAIL' <<<"$out" | head -5; status=1
+fi
+while read -r line; do
+    shown="$(sed -E 's/.*hash ([0-9a-f]{16}).*/\1/' <<<"$line")"
+    log="$(sed -E 's/.*log (.*)$/\1/' <<<"$line")"
+    replayed="$("$replay" "$log" | grep '^end ' | tail -1 | cut -d' ' -f3)"
+    if [[ "$shown" == "$replayed" ]]; then
+        echo "  ok   saved game replays to the hash shown: ${line%%, hash*}"
+    else
+        echo "  FAIL saved game $log: game showed $shown, bw_replay reached $replayed"; status=1
+    fi
+done < <(grep '^played:' <<<"$out")
 exit $status
