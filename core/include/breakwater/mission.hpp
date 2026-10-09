@@ -22,6 +22,12 @@ inline constexpr int kDeployRow = 4;
 inline constexpr int kStartTide = 1;
 inline constexpr int kTurnCount = 5;
 
+enum class Outcome : std::uint8_t {
+    InProgress,
+    Won,  ///< The enemy phase of the last turn completed without a loss.
+    Lost, ///< Every engineer died, or every building was razed.
+};
+
 /// Where an engineer is in its turn: it may move and then shove, and a shove
 /// ends its turn.
 enum class ActionState : std::uint8_t {
@@ -72,6 +78,7 @@ enum class Rejection : std::uint8_t {
     AlreadyActed,   ///< The engineer shoved this turn.
     Unreachable,    ///< The destination is not in reachable().
     NothingToShove, ///< No living unit on the adjacent tile.
+    MissionOver,    ///< The mission has been won or lost.
 };
 
 [[nodiscard]] constexpr std::string_view describe(Rejection r) noexcept {
@@ -88,6 +95,8 @@ enum class Rejection : std::uint8_t {
         return "destination is out of reach";
     case Rejection::NothingToShove:
         return "nothing to shove there";
+    case Rejection::MissionOver:
+        return "the mission is over";
     }
     return "unknown";
 }
@@ -106,6 +115,7 @@ enum class EventKind : std::uint8_t {
     AttackResolved,  ///< Crawler `unit` at `from` struck `to`, whatever was there.
     TideRose,        ///< The tide is now `value`.
     UnitSpawned,     ///< Crawler `unit` came ashore at `to`.
+    MissionEnded,    ///< `value` is the Outcome. Always the last event.
 };
 
 struct Event {
@@ -135,8 +145,9 @@ public:
 
     [[nodiscard]] const Board& board() const noexcept { return board_; }
     [[nodiscard]] std::uint64_t seed() const noexcept { return seed_; }
-    /// 1-based.
+    /// 1-based. Stays at the last turn once the mission is won.
     [[nodiscard]] int turn() const noexcept { return turn_; }
+    [[nodiscard]] Outcome outcome() const noexcept { return outcome_; }
     /// Precondition: `id` names a unit.
     [[nodiscard]] ActionState action_state(UnitId id) const;
     /// What crawler `id` will strike next enemy phase. Empty for engineers, the
@@ -147,15 +158,16 @@ public:
     /// engineer may not move: not an engineer, dead, or already acted.
     [[nodiscard]] std::vector<Coord> reachable(UnitId engineer) const;
 
-    /// Applies a command whole, or refuses it and changes nothing.
+    /// Applies a command whole, or refuses it and changes nothing. Every
+    /// command is refused once the mission is over.
     std::expected<void, Rejection> apply(const Command& command);
 
     /// Events since the last call, oldest first.
     [[nodiscard]] std::vector<Event> take_events();
 
     /// FNV-1a over everything that decides the future: the board, the seed
-    /// (later draws derive from it), the turn, the action states, the intents
-    /// and the spawn table.
+    /// (later draws derive from it), the turn, the action states, the intents,
+    /// the spawn table and the outcome.
     [[nodiscard]] std::uint64_t state_hash() const noexcept;
 
 private:
@@ -171,6 +183,10 @@ private:
     void plan_crawlers();
     void plan_crawler(UnitId id);
     void emit_damage(UnitId id);
+    /// Ends the mission as lost if the last engineer or building is gone, and
+    /// says whether it did.
+    bool check_loss();
+    void end(Outcome outcome);
 
     Board board_;
     std::uint64_t seed_ = 0;
@@ -178,6 +194,12 @@ private:
     std::vector<ActionState> actions_; ///< Indexed by UnitId.
     std::vector<Intent> intents_;      ///< Indexed by UnitId.
     SpawnTable spawns_ = kSpawnTable;
+    Outcome outcome_ = Outcome::InProgress;
+    /// Whether the mission started with any engineer or building. Neither can
+    /// be created later, so a hand-built board without buildings cannot be
+    /// lost by razing them. Generated missions always have both.
+    bool has_engineers_ = false;
+    bool has_town_ = false;
     std::vector<Event> events_;
 };
 
