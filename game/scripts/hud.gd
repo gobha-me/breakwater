@@ -54,12 +54,16 @@ func _ready() -> void:
 
 func sync(mission: BreakwaterMission) -> void:
 	var tide := mission.get_tide()
-	_status.text = "Turn %d / %d     Tide %d  (next %d)" % [mission.get_turn(), mission.get_turn_count(), tide, tide + 1]
+	var over := mission.get_outcome() != BreakwaterMission.OUTCOME_IN_PROGRESS
+	_status.text = ("Turn %d / %d     Tide %d" % [mission.get_turn(), mission.get_turn_count(), tide]
+			+ ("" if over else "  (next %d)" % (tide + 1)))
 	var lines: PackedStringArray = []
 	for u in mission.get_units():
 		if not u["engineer"]:
 			continue
-		var state: String = ACTION_NAMES[int(u["action"])] if u["alive"] else "lost"
+		var state: String = "lost"
+		if u["alive"]:
+			state = "standing" if over else ACTION_NAMES[int(u["action"])]
 		lines.append("Engineer %d   %s   %s" % [int(u["id"]) + 1, "●".repeat(u["hp"]), state])
 	_engineers.text = "\n".join(lines)
 	match mission.get_outcome():

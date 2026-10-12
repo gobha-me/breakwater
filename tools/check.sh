@@ -13,5 +13,12 @@ gate "clang-tidy";       tools/lint.sh
 gate "replay";           tools/replay_check.sh
 gate "proof";            tools/seeds_check.sh
 gate "godot smoke";      tools/godot_smoke.sh
+# Rendering needs a display (an unlocked desktop session or xvfb-run). With
+# none available, BREAKWATER_SKIP_GOLDEN=1 skips this gate, loudly.
+if [[ "${BREAKWATER_SKIP_GOLDEN:-}" == 1 ]]; then
+    gate "golden image";  echo "SKIPPED: BREAKWATER_SKIP_GOLDEN=1 (not verified)"
+else
+    gate "golden image";  tools/golden.sh
+fi
 
 printf '\nAll gates passed.\n'

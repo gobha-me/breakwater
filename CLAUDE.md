@@ -33,6 +33,9 @@ captures, replay hashes), never just claim completion.
    with `bw_solve --range 0-999 --budget 1000000`.
 8. `tools/godot_smoke.sh`: headless Godot loads the extension, checks the
    bridge, autoplays every log through the scene, and plays by injected input.
+9. `tools/golden.sh`: renders the opening of `win-seed20.log` and compares it
+   with `tests/golden/opening-seed20.png` (re-record with `--update` after an
+   intended visual change, and say so in the PR). Needs a display.
 
 Suppressions: a disabled check in `.clang-tidy` carries its reason there; an
 inline suppression names the exact check, with the reason on the line above
@@ -56,11 +59,13 @@ inline suppression names the exact check, with the reason on the line above
 
 ## Visual checks
 
-`tools/capture.sh [out.png]` renders the main scene through the game's own
-viewport (`game/scripts/capture.gd`), so no desktop screenshot permission is
-needed. It needs `xvfb-run` (package `xorg-server-xvfb`) to work over SSH or
-with the screen locked: KWin suspends hidden Wayland windows, so they never
-render. Read the PNG to review it. Later it becomes the golden-image gate.
+`tools/capture.sh out.png [frames] -- --log=<abs log> --after-turn=<n>`
+renders any position of a log through the game's own viewport
+(`game/scripts/capture.gd`), so no desktop screenshot permission is needed.
+Godot still needs a display to render into (`--headless` draws nothing): it
+uses `xvfb-run` when installed, otherwise the current display, otherwise the
+desktop session's Wayland socket, which works over SSH while the session is
+unlocked. Read the PNG to review it.
 
 ## Assets
 
