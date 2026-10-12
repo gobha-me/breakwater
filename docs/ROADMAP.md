@@ -4,16 +4,16 @@ Phases run in order. Each ends with evidence, not a claim. The acceptance
 criteria being chased are in [the concept](CONCEPT.md); the numbers in
 parentheses say which criterion a phase closes.
 
-## Status, 2026-10-09
+## Status, 2026-10-12
 
 | Phase | State | Concept criterion |
 |---|---|---|
 | 0 Rules | Done: `RULES.md` (#13), rebalanced in #39 | n/a |
 | 1 Core loop | Done (#15, #17, #18, #23) | 2: rules only in `core/` |
 | 2 Replay | Done (#24, #31, #32) | 3: `tools/replay_check.sh`, 12/12 identical |
-| 3 Playable | Code done (#35, #40, #41); captures blocked on `xvfb-run` (#28) | 1: playable by input, verified headless |
+| 3 Playable | Done (#35, #40, #41, #46); captures in `docs/captures/` | 1: playable by input; 6: golden gate in place |
 | 4 Solver | Done (#36, #42) | 4: `tools/seeds_check.sh`, 993 proven, 7 rejected |
-| 5 Assets | Waiting on checkpoint C1 (#43) | 5, 6 |
+| 5 Assets | Waiting on checkpoint C1 (#43) | 5; golden re-recorded with the assets |
 
 Revised since the plan: crawlers now go for the town, strike for 2 and move 3
 (#19, #39). The solver showed the original rules never needed a shove.
