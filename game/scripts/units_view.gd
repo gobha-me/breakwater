@@ -127,8 +127,8 @@ func _create(id: int, engineer: bool) -> void:
 
 	var pips := Label3D.new()
 	pips.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	pips.font_size = 40
-	pips.outline_size = 10
+	pips.font_size = 64
+	pips.outline_size = 14
 	pips.modulate = Color(0.4, 1, 0.5) if engineer else Color(1, 0.5, 0.4)
 	pips.position.y = 1.05 if engineer else 0.6
 	root.add_child(pips)
@@ -145,21 +145,35 @@ func _sync_strikes(mission: BreakwaterMission) -> void:
 			continue
 		var from := Vector2i(u["x"], u["y"])
 		var to: Vector2i = from + DIRS[int(u["intent"])]
-		var a := _board.top_of(from) + Vector3(0, 0.45, 0)
-		var b := _board.top_of(to) + Vector3(0, 0.45, 0)
+		# Flat on the ground, from the crawler's tile to its target, and drawn
+		# over everything (see _strike_material), so no body in front can hide
+		# a telegraph and the direction reads from above.
+		var lift := Vector3(0, 0.08, 0)
+		var a := _board.top_of(from) + lift
+		var b := Vector3(_board.top_of(to).x, a.y, _board.top_of(to).z)
 		_strikes.add_child(_arrow(a, b))
 		_strikes.add_child(_marker(_board.top_of(to)))
 
 
+## Telegraphs must never be hidden (pillar 1): no depth test, drawn last.
+func _strike_material(color: Color) -> StandardMaterial3D:
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = color
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.no_depth_test = true
+	mat.render_priority = 10
+	if color.a < 1.0:
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	return mat
+
+
 func _arrow(a: Vector3, b: Vector3) -> Node3D:
 	var arrow := Node3D.new()
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = STRIKE_COLOR
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	var mat := _strike_material(STRIKE_COLOR)
 	var length := a.distance_to(b) * 0.8
 	var shaft := MeshInstance3D.new()
 	var box := BoxMesh.new()
-	box.size = Vector3(0.07, 0.07, length * 0.7)
+	box.size = Vector3(0.16, 0.03, length * 0.7)
 	shaft.mesh = box
 	shaft.material_override = mat
 	shaft.position = Vector3(0, 0, -length * 0.35)
@@ -167,7 +181,7 @@ func _arrow(a: Vector3, b: Vector3) -> Node3D:
 	var tip := MeshInstance3D.new()
 	var cone := CylinderMesh.new()
 	cone.top_radius = 0.0
-	cone.bottom_radius = 0.14
+	cone.bottom_radius = 0.22
 	cone.height = length * 0.3
 	tip.mesh = cone
 	tip.material_override = mat
@@ -184,10 +198,6 @@ func _marker(top: Vector3) -> MeshInstance3D:
 	var plane := PlaneMesh.new()
 	plane.size = Vector2(0.8, 0.8)
 	mark.mesh = plane
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(STRIKE_COLOR, 0.45)
-	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mark.material_override = mat
+	mark.material_override = _strike_material(Color(STRIKE_COLOR, 0.65))
 	mark.position = top + Vector3(0, 0.02, 0)
 	return mark

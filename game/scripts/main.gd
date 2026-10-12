@@ -6,6 +6,8 @@ extends Node3D
 ## User arguments (after `--`):
 ##   --seed=<n>          start a fresh mission from this seed
 ##   --log=<path>        start from the position a log reaches
+##   --after-turn=<n>    with --log: stop after the log's n-th end turn
+##                       (0 = the opening position)
 ##   --autoplay=<path>   play a log's commands one by one through the scene,
 ##                       print the outcome and hash, and quit
 ##   --speed=<x>         playback speed multiplier (autoplay defaults to 8)
@@ -45,10 +47,7 @@ func _ready() -> void:
 	save_dir = args.get("save-dir", save_dir)
 	Engine.time_scale = float(args.get("speed", "8" if args.has("autoplay") else "1"))
 	if args.has("log"):
-		var err := mission.load_log(FileAccess.get_file_as_string(args["log"]))
-		if not err.is_empty():
-			push_error("log: " + err)
-		_rebuild()
+		_load_until(args["log"], int(args.get("after-turn", "-1")))
 	else:
 		restart(int(args.get("seed", str(mission_seed))))
 	if args.has("autoplay"):
@@ -153,6 +152,33 @@ func _play(e: Dictionary) -> void:
 		await tween.finished
 
 
+## The position a log reaches after its `turns`-th end turn (all of it when
+## negative), without playback. The scene is built from the opening position
+## and then synced, as in live play, so buildings razed along the way still
+## show as rubble.
+func _load_until(path: String, turns: int) -> void:
+	var parsed := BreakwaterMission.parse_log(FileAccess.get_file_as_string(path))
+	if not parsed["error"].is_empty():
+		push_error("log: " + parsed["error"])
+		return
+	mission.generate(parsed["seed"])
+	_rebuild()
+	var ended := 0
+	for c in parsed["commands"]:
+		if turns >= 0 and ended >= turns:
+			break
+		match c["verb"]:
+			"move":
+				mission.move(c["engineer"], c["x"], c["y"])
+			"shove":
+				mission.shove(c["engineer"], c["dir"])
+			_:
+				mission.end_turn()
+				ended += 1
+	mission.take_events()
+	_sync()
+
+
 ## Runs a log through the scene exactly as a player's commands would go, so
 ## the presentation is exercised headless. Prints the result and quits.
 func _autoplay(path: String) -> void:
@@ -187,10 +213,13 @@ func _autoplay(path: String) -> void:
 
 func _build_environment() -> void:
 	var center := Vector3(3.5, 0.0, 3.5)
+	# Steep enough that a body hides little of the tile behind it, close
+	# enough that the board fills the frame.
 	var camera := Camera3D.new()
-	camera.position = center + Vector3(0.0, 9.0, 8.5)
+	camera.fov = 50.0
+	camera.position = center + Vector3(0.0, 10.5, 6.0)
 	add_child(camera)
-	camera.look_at(center + Vector3(0.0, 0.0, 0.5))
+	camera.look_at(center + Vector3(0.0, 0.6, 0.6))
 
 	var sun := DirectionalLight3D.new()
 	sun.rotation_degrees = Vector3(-50.0, -30.0, 0.0)

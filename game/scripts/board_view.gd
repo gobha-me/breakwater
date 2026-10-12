@@ -12,7 +12,7 @@ const SAND := [Color(0.85, 0.78, 0.55), Color(0.82, 0.76, 0.54), Color(0.75, 0.7
 const FLOODED := Color(0.25, 0.42, 0.55)
 const NEXT_FLOOD := Color(0.3, 0.6, 0.95, 0.55)
 const HOUSE := Color(0.78, 0.42, 0.32)
-const RUBBLE := Color(0.35, 0.32, 0.3)
+const RUBBLE := Color(0.22, 0.16, 0.12)  # Dark, so a razed house reads against the grey high ground.
 
 var _mission: BreakwaterMission
 var _size := 0
@@ -112,8 +112,8 @@ func _build_tile(c: Vector2i) -> void:
 		add_child(body)
 		var label := Label3D.new()
 		label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-		label.font_size = 48
-		label.outline_size = 12
+		label.font_size = 64
+		label.outline_size = 14
 		label.position = Vector3(c.x * TILE, height + 0.85, c.y * TILE)
 		add_child(label)
 		_houses[c] = {"body": body, "mat": body.material_override, "label": label}
@@ -133,15 +133,16 @@ func _show_house(c: Vector2i, hp: int) -> void:
 		label.modulate = Color(1, 0.9, 0.6)
 	else:
 		mat.albedo_color = RUBBLE
-		body.scale = Vector3(1.0, 0.25, 1.0)
-		body.position.y = top + 0.075
-		label.text = ""
+		body.scale = Vector3(1.15, 0.3, 1.15)
+		body.position.y = top + 0.09
+		label.text = "✕"
+		label.modulate = Color(1, 0.4, 0.3)
 
 
 func _build_water() -> void:
 	_water = MeshInstance3D.new()
 	var plane := PlaneMesh.new()
-	var extent := _size * TILE + 6.0
+	var extent := _size * TILE + 30.0
 	plane.size = Vector2(extent, extent)
 	_water.mesh = plane
 	var mat := StandardMaterial3D.new()
