@@ -67,6 +67,11 @@ uses `xvfb-run` when installed, otherwise the current display, otherwise the
 desktop session's Wayland socket, which works over SSH while the session is
 unlocked. Read the PNG to review it.
 
+`tools/record.sh <log> [out.mp4]` records a log as video in Godot's Movie
+Maker mode (fixed 30 fps; the same log gives a byte-identical file), showing
+each selection and shove preview as a player sees them. Pull stills with
+`ffmpeg -ss <t> -i <mp4> -frames:v 1 still.png` to review it.
+
 ## Assets
 
 Meshy (MCP) for generation, Blender (MCP) for cleanup. Every asset gets an entry
