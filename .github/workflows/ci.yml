@@ -21,7 +21,7 @@ env:
 
 jobs:
   format:
-    name: clang-format
+    name: clang-format and gdlint
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -38,6 +38,11 @@ jobs:
         env:
           CLANG_FORMAT: clang-format-20
         run: tools/format.sh --check
+
+      - name: Lint and format-check GDScript
+        run: |
+          pipx install gdtoolkit==4.5.0
+          tools/gdlint.sh
 
   sanitizers:
     name: clang ASan+UBSan

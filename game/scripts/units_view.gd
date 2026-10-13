@@ -14,6 +14,15 @@ const STRIKE_COLOR := Color(0.95, 0.15, 0.1)
 const HIGHLIGHT_COLOR := Color(1.0, 0.85, 0.1)
 const DIRS := [Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0)]
 const BoardView := preload("res://scripts/board_view.gd")
+const ENGINEER_MODEL := "res://assets/models/engineer.glb"
+const CRAWLER_MODEL := "res://assets/models/crawler.glb"
+## Sizes the bodies are fitted to, in tiles. play_input.gd's pick boxes use
+## the same heights.
+const ENGINEER_SIZE := Vector2(0.7, 1.0)  # Footprint, height.
+const CRAWLER_SIZE := Vector2(0.95, 0.5)
+
+## How many times an actor was marked: for the input test.
+var actors_marked := 0
 
 var _board: BoardView
 var _units := {}  # id -> {"root": Node3D, "ring": HealthRing, "flash": StandardMaterial3D, "engineer": bool}
@@ -22,8 +31,6 @@ var _strikes: Node3D
 var _strike_arrows := {}  # crawler id -> arrow Node3D
 var _highlighted := -1
 var _actor_mark: Label3D
-## How many times an actor was marked: for the input test.
-var actors_marked := 0
 
 
 func build(board: BoardView) -> void:
@@ -114,14 +121,6 @@ func tween_spawn(id: int, engineer: bool, at: Vector3) -> Tween:
 	var tween := create_tween()
 	tween.tween_property(root, "position", at, 0.3).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	return tween
-
-
-const ENGINEER_MODEL := "res://assets/models/engineer.glb"
-const CRAWLER_MODEL := "res://assets/models/crawler.glb"
-## Sizes the bodies are fitted to, in tiles. play_input.gd's pick boxes use
-## the same heights.
-const ENGINEER_SIZE := Vector2(0.7, 1.0)  # Footprint, height.
-const CRAWLER_SIZE := Vector2(0.95, 0.5)
 
 
 func _create(id: int, engineer: bool) -> void:

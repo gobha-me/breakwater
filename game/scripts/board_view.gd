@@ -6,9 +6,17 @@ const TILE := 1.0
 const BASE_HEIGHT := 0.2
 const STEP_HEIGHT := 0.15  # Elevation runs 0-8 (docs/RULES.md): keep the beach low.
 
-const SAND := [Color(0.85, 0.78, 0.55), Color(0.82, 0.76, 0.54), Color(0.75, 0.72, 0.5),
-		Color(0.6, 0.66, 0.42), Color(0.45, 0.62, 0.35), Color(0.4, 0.58, 0.32),
-		Color(0.38, 0.55, 0.3), Color(0.45, 0.5, 0.4), Color(0.5, 0.5, 0.45)]
+const SAND := [
+	Color(0.85, 0.78, 0.55),
+	Color(0.82, 0.76, 0.54),
+	Color(0.75, 0.72, 0.5),
+	Color(0.6, 0.66, 0.42),
+	Color(0.45, 0.62, 0.35),
+	Color(0.4, 0.58, 0.32),
+	Color(0.38, 0.55, 0.3),
+	Color(0.45, 0.5, 0.4),
+	Color(0.5, 0.5, 0.45)
+]
 const FLOODED := Color(0.25, 0.42, 0.55)
 const FLOODED_TINT := Color(0.45, 0.62, 0.8)
 ## Per band (sand, grass, stony ground), multiplied into the texture.
@@ -95,8 +103,11 @@ func sync() -> void:
 			var i := y * _size + x
 			var flooded := _mission.is_flooded(x, y)
 			_tint_tile(_tile_mats[i], _mission.get_elevation(x, y), flooded)
-			_next_marks[i].visible = (not flooded and _mission.floods_next(x, y)
-					and _mission.get_outcome() == BreakwaterMission.OUTCOME_IN_PROGRESS)
+			_next_marks[i].visible = (
+				not flooded
+				and _mission.floods_next(x, y)
+				and _mission.get_outcome() == BreakwaterMission.OUTCOME_IN_PROGRESS
+			)
 	for c in _houses:
 		_show_house(c, _mission.get_building_hp(c.x, c.y))
 	# A prop gives way to anything standing on its tile, so it can never hide

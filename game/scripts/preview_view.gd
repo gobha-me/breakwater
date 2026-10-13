@@ -9,9 +9,10 @@ const GHOST := Color(1.0, 1.0, 1.0, 0.85)
 const HARM := Color(1.0, 0.25, 0.2)
 const REDIRECT := Color(1.0, 0.6, 0.1)
 
-var _board: BoardView
 ## The shown preview's key, so hovering the same target doesn't redraw.
 var shown := ""
+
+var _board: BoardView
 
 
 func setup(board: BoardView) -> void:
