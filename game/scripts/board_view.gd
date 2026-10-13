@@ -14,8 +14,9 @@ const FLOODED_TINT := Color(0.45, 0.62, 0.8)
 ## Per band (sand, grass, stony ground), multiplied into the texture.
 const BAND_TINT := [Color(1.0, 1.0, 1.0), Color(0.72, 0.8, 0.66), Color(0.95, 0.95, 0.95)]
 const TERRAIN_SHADER := preload("res://shaders/terrain.gdshader")
+const WATER_SHADER := preload("res://shaders/water.gdshader")
+const NEXT_FLOOD_SHADER := preload("res://shaders/next_flood.gdshader")
 const CLIFF_TEXTURE := "res://assets/textures/terrain_cliff.jpg"
-const NEXT_FLOOD := Color(0.3, 0.6, 0.95, 0.55)
 const HOUSE := Color(0.78, 0.42, 0.32)
 const BUILDING_RING := Color(1.0, 0.82, 0.35)
 ## A cottage below full HP: a dark wash over the model that reads as damaged.
@@ -30,6 +31,23 @@ var _tile_mats: Array[Material] = []
 var _next_marks: Array[MeshInstance3D] = []
 var _houses := {}  # Vector2i -> {"body", "rubble", "flash", "label", "ring"}
 var _water: MeshInstance3D
+var _water_mat: ShaderMaterial
+var _phase := 0.0
+## Captures and recordings advance the ripples by frame, not by wall clock,
+## so the same frame always shows the same water.
+var _frame_locked := false
+
+
+func _ready() -> void:
+	for arg in OS.get_cmdline_user_args():
+		_frame_locked = _frame_locked or arg.begins_with("--capture")
+	_frame_locked = _frame_locked or OS.get_cmdline_args().has("--write-movie")
+
+
+func _process(delta: float) -> void:
+	_phase += 1.0 / 60.0 if _frame_locked else delta
+	if _water_mat != null:
+		_water_mat.set_shader_parameter("phase", _phase)
 
 
 func build(mission: BreakwaterMission) -> void:
@@ -103,15 +121,13 @@ func _build_tile(c: Vector2i) -> void:
 	_tile_mats.append(tile.material_override)
 	add_child(tile)
 
-	# A translucent blue film over tiles the next tide will take.
+	# Blue hatching over tiles the next tide will take (next_flood.gdshader).
 	var mark := MeshInstance3D.new()
 	var plane := PlaneMesh.new()
 	plane.size = Vector2(TILE * 0.9, TILE * 0.9)
 	mark.mesh = plane
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = NEXT_FLOOD
-	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	var mat := ShaderMaterial.new()
+	mat.shader = NEXT_FLOOD_SHADER
 	mark.material_override = mat
 	mark.position = Vector3(c.x * TILE, height + 0.01, c.y * TILE)
 	_next_marks.append(mark)
@@ -201,10 +217,10 @@ func _build_water() -> void:
 	var extent := _size * TILE + 30.0
 	plane.size = Vector2(extent, extent)
 	_water.mesh = plane
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(0.15, 0.4, 0.65, 0.75)
-	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	var mat := ShaderMaterial.new()
+	mat.shader = WATER_SHADER
 	_water.material_override = mat
+	_water_mat = mat
 	var c := center()
 	_water.position = Vector3(c.x, _water_height(_mission.get_tide()), c.z)
 	add_child(_water)
