@@ -11,6 +11,7 @@ const HURT := Color(0.1, 0.02, 0.02, 0.45)
 const CLEAR := Color(1, 0.15, 0.1, 0.0)
 const FLASH := Color(1, 0.15, 0.1, 0.75)
 const STRIKE_COLOR := Color(0.95, 0.15, 0.1)
+const HIGHLIGHT_COLOR := Color(1.0, 0.85, 0.1)
 const DIRS := [Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0)]
 const BoardView := preload("res://scripts/board_view.gd")
 
@@ -18,6 +19,8 @@ var _board: BoardView
 var _units := {}  # id -> {"root": Node3D, "ring": HealthRing, "flash": StandardMaterial3D, "engineer": bool}
 var _max_hp := 2  # Refreshed from the mission on every sync.
 var _strikes: Node3D
+var _strike_arrows := {}  # crawler id -> arrow Node3D
+var _highlighted := -1
 
 
 func build(board: BoardView) -> void:
@@ -183,19 +186,62 @@ static func _set_overlay(node: Node, overlay: Material) -> void:
 func _sync_strikes(mission: BreakwaterMission) -> void:
 	for child in _strikes.get_children():
 		child.queue_free()
+	_strike_arrows.clear()
+	# Group strikes by target, so several on one tile stay distinguishable.
+	var by_target := {}  # Vector2i -> Array of [crawler id, from]
 	for u in mission.get_units():
 		if not u["alive"] or int(u["intent"]) < 0:
 			continue
 		var from := Vector2i(u["x"], u["y"])
 		var to: Vector2i = from + DIRS[int(u["intent"])]
-		# Flat on the ground, from the crawler's tile to its target, and drawn
-		# over everything (see _strike_material), so no body in front can hide
-		# a telegraph and the direction reads from above.
-		var lift := Vector3(0, 0.08, 0)
-		var a := _board.top_of(from) + lift
-		var b := Vector3(_board.top_of(to).x, a.y, _board.top_of(to).z)
-		_strikes.add_child(_arrow(a, b))
+		if not by_target.has(to):
+			by_target[to] = []
+		by_target[to].append([int(u["id"]), from])
+	for to in by_target:
+		var strikes: Array = by_target[to]
+		for i in strikes.size():
+			var id: int = strikes[i][0]
+			var from: Vector2i = strikes[i][1]
+			# Flat on the ground, from the crawler's tile to its target, and
+			# drawn over everything (see _strike_material), so no body in front
+			# can hide a telegraph and the direction reads from above. Strikes
+			# sharing a target shift sideways so opposite ones don't merge.
+			var lift := Vector3(0, 0.08, 0)
+			var a := _board.top_of(from) + lift
+			var b := Vector3(_board.top_of(to).x, a.y, _board.top_of(to).z)
+			var side := Vector3(-(b - a).z, 0.0, (b - a).x).normalized()
+			var shift := side * (0.14 * (i - (strikes.size() - 1) * 0.5)) if strikes.size() > 1 else Vector3.ZERO
+			var arrow := _arrow(a + shift, b + shift)
+			_strikes.add_child(arrow)
+			_strike_arrows[id] = arrow
 		_strikes.add_child(_marker(_board.top_of(to)))
+		if strikes.size() > 1:
+			var count := Label3D.new()
+			count.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+			count.no_depth_test = true
+			count.render_priority = 12
+			count.font_size = 80
+			count.outline_size = 24
+			count.modulate = Color(1, 1, 1)
+			count.outline_modulate = Color(0.6, 0.05, 0.03)
+			count.text = "×%d" % strikes.size()
+			count.position = _board.top_of(to) + Vector3(0.45, 0.7, 0.45)
+			_strikes.add_child(count)
+	highlight_strike(_highlighted)
+
+
+## Highlights crawler `id`'s strike (−1 for none), as when hovering it.
+func highlight_strike(id: int) -> void:
+	_highlighted = id
+	for crawler in _strike_arrows:
+		var arrow: Node3D = _strike_arrows[crawler]
+		var mat: Material = _strike_material(HIGHLIGHT_COLOR if crawler == id else STRIKE_COLOR)
+		for part in arrow.get_children():
+			(part as MeshInstance3D).material_override = mat
+
+
+func highlighted_strike() -> int:
+	return _highlighted if _strike_arrows.has(_highlighted) else -1
 
 
 ## Telegraphs must never be hidden (pillar 1): no depth test, drawn last.

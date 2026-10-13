@@ -38,6 +38,7 @@ func _run() -> void:
 	_check_picking()
 	await _check_preview()
 	await _check_undo()
+	await _check_strike_hover()
 	_main.restart(78)
 	_check(_main.mission.get_seed() == 79, "a rejected seed is never played: 78 starts mission 79")
 	await _key(KEY_N)
@@ -117,6 +118,23 @@ func _check_undo() -> void:
 	_check(mission.get_state_hash() == before, "Z restores the exact state before the move")
 	await _key(KEY_Z)
 	_check(mission.get_state_hash() == before, "Z with nothing to undo changes nothing")
+
+
+## Hovering a crawler highlights its own strike; moving off clears it.
+func _check_strike_hover() -> void:
+	_main.restart(20)
+	await _frames(2)
+	var crawler := -1
+	var at := Vector2i(-1, -1)
+	for u in _main.mission.get_units():
+		if not u["engineer"] and int(u["intent"]) >= 0:
+			crawler = int(u["id"])
+			at = Vector2i(u["x"], u["y"])
+	_check(crawler >= 0, "seed 20 opens with a telegraphing crawler")
+	await _move_mouse(at)
+	_check(_main.units.highlighted_strike() == crawler, "hovering a crawler highlights its strike")
+	await _move_mouse(Vector2i(7, 7))
+	_check(_main.units.highlighted_strike() == -1, "moving off clears the highlight")
 
 
 func _move_mouse(c: Vector2i) -> void:

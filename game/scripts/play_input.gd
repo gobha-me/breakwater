@@ -48,8 +48,15 @@ func setup(owner_scene: Node3D) -> void:
 
 ## Previews the shove a click on `c` would make, if it would make one; clears
 ## the preview otherwise. Hover and the input test both come through here.
-func hover(c: Vector2i) -> void:
-	if not _accepting() or selected < 0 or _unit_at(c).is_empty() or not _is_adjacent(c):
+func hover(c: Vector2i, crawler := -2) -> void:
+	# Hovering a crawler highlights its own strike. `crawler` is the first
+	# crawler along the mouse ray (see _crawler_under), which finds one even
+	# behind an engineer's body; -2 means "use the tile".
+	var under := _unit_at(c)
+	if crawler == -2:
+		crawler = int(under["id"]) if not under.is_empty() and not under["engineer"] else -1
+	main.units.highlight_strike(crawler)
+	if not _accepting() or selected < 0 or under.is_empty() or not _is_adjacent(c):
 		preview.clear()
 		return
 	var dir := DIRS.find(c - _selected_pos())
@@ -79,6 +86,17 @@ func pick_for_click(screen: Vector2) -> Vector2i:
 				continue
 		return c
 	return Vector2i(-1, -1)
+
+
+## The first living crawler along the ray through `screen`, or −1, ignoring
+## whatever stands in front of it.
+func _crawler_under(screen: Vector2) -> int:
+	for hit in _hits(screen):
+		if hit["unit"]:
+			var u := _unit_at(hit["tile"])
+			if not u.is_empty() and not u["engineer"]:
+				return int(u["id"])
+	return -1
 
 
 ## Every box the camera ray through `screen` hits, nearest first:
@@ -171,7 +189,7 @@ func refresh() -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion:
-		hover(pick_for_click(event.position))
+		hover(pick_for_click(event.position), _crawler_under(event.position))
 	elif event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 		var c := pick_for_click(event.position)
 		if c.x >= 0:
