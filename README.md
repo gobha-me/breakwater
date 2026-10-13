@@ -38,4 +38,8 @@ tools/check.sh   # format, ASan+UBSan, GCC, clang, clang-tidy, replay, Godot smo
 
 ## License
 
-To be decided.
+BSD 3-Clause; see [LICENSE](LICENSE). This covers the code and the assets in
+`game/assets/` (provenance in [assets/PROVENANCE.md](assets/PROVENANCE.md)).
+
+Fetched at build time, under their own licences: godot-cpp (MIT) and
+Catch2 (BSL-1.0). Godot itself is MIT.
