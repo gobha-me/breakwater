@@ -12,6 +12,8 @@ const SAND := [Color(0.85, 0.78, 0.55), Color(0.82, 0.76, 0.54), Color(0.75, 0.7
 const FLOODED := Color(0.25, 0.42, 0.55)
 const NEXT_FLOOD := Color(0.3, 0.6, 0.95, 0.55)
 const HOUSE := Color(0.78, 0.42, 0.32)
+const COTTAGE_MODEL := "res://assets/models/cottage.glb"
+const SEAWALL_MODEL := "res://assets/models/seawall.glb"
 const RUBBLE := Color(0.22, 0.16, 0.12)  # Dark, so a razed house reads against the grey high ground.
 
 var _mission: BreakwaterMission
@@ -34,6 +36,7 @@ func build(mission: BreakwaterMission) -> void:
 		for x in _size:
 			_build_tile(Vector2i(x, y))
 	_build_water()
+	_build_breakwater()
 	sync()
 
 
@@ -76,11 +79,9 @@ func flash_building(c: Vector2i, hp: int) -> Tween:
 	var house: Dictionary = _houses.get(c, {})
 	if house.is_empty():
 		return null
-	var mat: StandardMaterial3D = house["mat"]
-	mat.emission_enabled = true
-	mat.emission = Color(1, 0.2, 0.1)
+	var flash: StandardMaterial3D = house["flash"]
 	var tween := create_tween()
-	tween.tween_property(mat, "emission_energy_multiplier", 0.0, 0.3).from(2.0)
+	tween.tween_property(flash, "albedo_color:a", 0.0, 0.3).from(0.75)
 	tween.tween_callback(func() -> void: _show_house(c, hp))
 	return tween
 
@@ -107,36 +108,47 @@ func _build_tile(c: Vector2i) -> void:
 	add_child(mark)
 
 	if _mission.get_building_hp(c.x, c.y) > 0:
-		var body := _box(Vector3(0.55, 0.6, 0.55))
-		body.position = Vector3(c.x * TILE, height + 0.3, c.y * TILE)
-		add_child(body)
+		var top := Vector3(c.x * TILE, height, c.y * TILE)
+		var body := ModelFit.instance(COTTAGE_MODEL, 0.92, 1.0)
+		if body == null:
+			body = _box(Vector3(0.55, 0.6, 0.55))
+			body.position.y = 0.3
+			(body as MeshInstance3D).material_override.albedo_color = HOUSE
+		var holder := Node3D.new()
+		holder.position = top
+		holder.add_child(body)
+		add_child(holder)
+		var flash := StandardMaterial3D.new()
+		flash.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		flash.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		flash.albedo_color = Color(1, 0.2, 0.1, 0.0)
+		_set_overlay(body, flash)
+		var rubble := _box(Vector3(0.65, 0.18, 0.65))
+		(rubble as MeshInstance3D).material_override.albedo_color = RUBBLE
+		rubble.position = top + Vector3(0, 0.09, 0)
+		add_child(rubble)
 		var label := Label3D.new()
 		label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 		label.font_size = 64
 		label.outline_size = 14
-		label.position = Vector3(c.x * TILE, height + 0.85, c.y * TILE)
+		label.position = top + Vector3(0, 1.15, 0)
 		add_child(label)
-		_houses[c] = {"body": body, "mat": body.material_override, "label": label}
+		_houses[c] = {"body": holder, "rubble": rubble, "flash": flash, "label": label}
 
 
 func _show_house(c: Vector2i, hp: int) -> void:
 	var house: Dictionary = _houses[c]
-	var body: MeshInstance3D = house["body"]
-	var mat: StandardMaterial3D = house["mat"]
 	var label: Label3D = house["label"]
-	var top := tile_top(_mission.get_elevation(c.x, c.y))
+	(house["body"] as Node3D).visible = hp > 0
+	(house["rubble"] as Node3D).visible = hp <= 0
 	if hp > 0:
-		mat.albedo_color = HOUSE
-		body.scale = Vector3.ONE
-		body.position.y = top + 0.3
 		label.text = "■".repeat(hp)
 		label.modulate = Color(1, 0.9, 0.6)
+		label.position.y = tile_top(_mission.get_elevation(c.x, c.y)) + 1.15
 	else:
-		mat.albedo_color = RUBBLE
-		body.scale = Vector3(1.15, 0.3, 1.15)
-		body.position.y = top + 0.09
 		label.text = "✕"
 		label.modulate = Color(1, 0.4, 0.3)
+		label.position.y = tile_top(_mission.get_elevation(c.x, c.y)) + 0.45
 
 
 func _build_water() -> void:
@@ -158,6 +170,25 @@ func _build_water() -> void:
 ## first dry level: flooded tiles are covered, dry ones stand clear.
 func _water_height(tide: int) -> float:
 	return BASE_HEIGHT + (tide - 0.5) * STEP_HEIGHT
+
+
+## Decoration only: the old breakwater out at sea, beyond row 0. It stands
+## on the sea floor, so the rising tide visibly swallows it. Not game state:
+## nothing here is read by the rules or by input.
+func _build_breakwater() -> void:
+	for i in 4:
+		var wall := ModelFit.instance(SEAWALL_MODEL, 1.8, 1.0)
+		if wall == null:
+			return
+		wall.position = Vector3(i * 2.0 + 0.5, 0.0, -1.4)
+		add_child(wall)
+
+
+static func _set_overlay(node: Node, overlay: Material) -> void:
+	if node is GeometryInstance3D:
+		node.material_overlay = overlay
+	for child in node.get_children():
+		_set_overlay(child, overlay)
 
 
 func _on_board(c: Vector2i) -> bool:

@@ -81,8 +81,9 @@ func _hits(screen: Vector2) -> Array[Dictionary]:
 			continue
 		var c := Vector2i(u["x"], u["y"])
 		var top := board.top_of(c)
-		var height := 0.9 if u["engineer"] else 0.4
-		var t := _ray_box(origin, dir, AABB(top + Vector3(-0.3, 0.0, -0.3), Vector3(0.6, height, 0.6)))
+		var size: Vector2 = UnitsView.ENGINEER_SIZE if u["engineer"] else UnitsView.CRAWLER_SIZE
+		var half := size.x * 0.5
+		var t := _ray_box(origin, dir, AABB(top + Vector3(-half, 0.0, -half), Vector3(size.x, size.y, size.x)))
 		if t < INF:
 			hits.append({"t": t, "tile": c, "unit": true})
 	hits.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return a["t"] < b["t"])
