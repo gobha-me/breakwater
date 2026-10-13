@@ -162,7 +162,15 @@ void soak_one(std::uint64_t seed, Rng& driver, SoakStats& stats) {
             // enough to use every engineer's move and shove.
             const auto commands = legal_commands(mission);
             const Command chosen = commands.at(driver.below(static_cast<std::uint32_t>(commands.size())));
+            // Every preview must be the outcome: same hash, same events.
+            auto preview = mission.preview(chosen);
+            REQUIRE(preview);
+            (void)mission.take_events();
             REQUIRE(mission.apply(chosen));
+            REQUIRE(preview->state_hash() == mission.state_hash());
+            const auto shown = preview->take_events();
+            const auto happened = mission.take_events();
+            REQUIRE(shown == happened);
             log.commands.push_back(chosen);
             ++stats.commands;
         }

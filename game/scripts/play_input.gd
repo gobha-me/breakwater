@@ -31,10 +31,30 @@ var selected := -1
 var _marks: Node3D
 
 
+const PreviewView := preload("res://scripts/preview_view.gd")
+
+var preview: PreviewView
+
+
 func setup(owner_scene: Node3D) -> void:
 	main = owner_scene
 	_marks = Node3D.new()
 	add_child(_marks)
+	preview = PreviewView.new()
+	add_child(preview)
+	preview.setup(main.board)
+
+
+## Previews the shove a click on `c` would make, if it would make one; clears
+## the preview otherwise. Hover and the input test both come through here.
+func hover(c: Vector2i) -> void:
+	if not _accepting() or selected < 0 or _unit_at(c).is_empty() or not _is_adjacent(c):
+		preview.clear()
+		return
+	var dir := DIRS.find(c - _selected_pos())
+	var mission: BreakwaterMission = main.mission
+	preview.show_preview("%d:%d:%s" % [selected, dir, mission.get_state_hash_hex()], mission.get_units(),
+			mission.preview_shove(selected, dir), mission.get_unit_max_hp())
 
 
 ## The tile under a screen position, or (-1, -1): the nearest box the camera
@@ -144,11 +164,14 @@ func cycle() -> void:
 func refresh() -> void:
 	if selected >= 0 and not (selected in _actionable_engineers()):
 		selected = -1
+	preview.clear()
 	_draw_marks()
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+	if event is InputEventMouseMotion:
+		hover(pick_for_click(event.position))
+	elif event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 		var c := pick_for_click(event.position)
 		if c.x >= 0:
 			click(c, event.shift_pressed)
@@ -181,6 +204,7 @@ func _accepting() -> bool:
 
 
 func _apply(verb: String, err: String) -> void:
+	preview.clear()
 	if not err.is_empty():
 		main.hud.say(err[0].to_upper() + err.substr(1) + ".")
 		return
@@ -192,6 +216,7 @@ func _apply(verb: String, err: String) -> void:
 
 func _select(id: int) -> void:
 	selected = id if id in _actionable_engineers() else -1
+	preview.clear()
 	_draw_marks()
 
 

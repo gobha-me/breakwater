@@ -173,6 +173,12 @@ public:
     /// Events since the last call, oldest first.
     [[nodiscard]] std::vector<Event> take_events();
 
+    /// What `command` would do, without doing it: the mission as it would be
+    /// afterwards, holding only that command's events. The same code path as
+    /// apply(), so a preview is the outcome, not an estimate. This mission is
+    /// unchanged either way.
+    [[nodiscard]] std::expected<Mission, Rejection> preview(const Command& command) const;
+
     /// FNV-1a over everything that decides the future: the board, the seed
     /// (later draws derive from it), the turn, the action states, the intents,
     /// the spawn table and the outcome.

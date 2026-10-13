@@ -194,12 +194,12 @@ bool BreakwaterMission::floods_next(int64_t x, int64_t y) const {
     return next.flooded(to_coord(x, y));
 }
 
-godot::Array BreakwaterMission::get_units() const {
+godot::Array BreakwaterMission::units_of(const Mission& mission) {
     godot::Array units;
-    const Board& board = mission_.board();
+    const Board& board = mission.board();
     for (UnitId id = 0; id < board.unit_count(); ++id) {
         const Unit& u = board.unit(id);
-        const Intent intent = mission_.intent(id);
+        const Intent intent = mission.intent(id);
         godot::Dictionary d;
         d["id"] = static_cast<int64_t>(id);
         d["engineer"] = u.kind == UnitKind::Engineer;
@@ -207,12 +207,14 @@ godot::Array BreakwaterMission::get_units() const {
         d["y"] = u.pos.y;
         d["hp"] = std::max(u.hp, 0);
         d["alive"] = u.alive();
-        d["action"] = static_cast<int64_t>(mission_.action_state(id));
+        d["action"] = static_cast<int64_t>(mission.action_state(id));
         d["intent"] = intent ? static_cast<int64_t>(*intent) : int64_t{-1};
         units.push_back(d);
     }
     return units;
 }
+
+godot::Array BreakwaterMission::get_units() const { return units_of(mission_); }
 
 godot::TypedArray<godot::Vector2i> BreakwaterMission::reachable(int64_t engineer) const {
     godot::TypedArray<godot::Vector2i> tiles;
@@ -222,18 +224,39 @@ godot::TypedArray<godot::Vector2i> BreakwaterMission::reachable(int64_t engineer
     return tiles;
 }
 
-godot::Array BreakwaterMission::take_events() {
-    godot::Array events;
-    for (const Event& e : mission_.take_events()) {
+godot::Array BreakwaterMission::events_of(const std::vector<Event>& events) {
+    godot::Array out;
+    for (const Event& e : events) {
         godot::Dictionary d;
         d["kind"] = static_cast<int64_t>(e.kind);
         d["unit"] = static_cast<int64_t>(e.unit);
         d["from"] = to_vector(e.from);
         d["to"] = to_vector(e.to);
         d["value"] = e.value;
-        events.push_back(d);
+        out.push_back(d);
     }
-    return events;
+    return out;
+}
+
+godot::Array BreakwaterMission::take_events() { return events_of(mission_.take_events()); }
+
+godot::Dictionary BreakwaterMission::preview_shove(int64_t engineer, int64_t dir) const {
+    godot::Dictionary out;
+    out["error"] = godot::String{};
+    out["events"] = godot::Array{};
+    out["units"] = godot::Array{};
+    if (dir < DIR_NORTH || dir > DIR_WEST) {
+        out["error"] = "unknown direction";
+        return out;
+    }
+    auto next = mission_.preview(ShoveCommand{.engineer = to_unit_id(engineer), .dir = static_cast<Direction>(dir)});
+    if (!next) {
+        out["error"] = to_godot(describe(next.error()));
+        return out;
+    }
+    out["events"] = events_of(next->take_events());
+    out["units"] = units_of(*next);
+    return out;
 }
 
 int64_t BreakwaterMission::get_state_hash() const { return std::bit_cast<int64_t>(mission_.state_hash()); }
@@ -253,6 +276,7 @@ void BreakwaterMission::_bind_methods() {
     ClassDB::bind_static_method("BreakwaterMission", D_METHOD("next_offered", "seed"),
                                 &BreakwaterMission::next_offered);
     ClassDB::bind_static_method("BreakwaterMission", D_METHOD("parse_log", "text"), &BreakwaterMission::parse_log);
+    ClassDB::bind_method(D_METHOD("preview_shove", "engineer", "dir"), &BreakwaterMission::preview_shove);
     ClassDB::bind_method(D_METHOD("move", "engineer", "x", "y"), &BreakwaterMission::move);
     ClassDB::bind_method(D_METHOD("shove", "engineer", "dir"), &BreakwaterMission::shove);
     ClassDB::bind_method(D_METHOD("end_turn"), &BreakwaterMission::end_turn);

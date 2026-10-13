@@ -70,6 +70,11 @@ public:
     /// `error` is "" on success; unused fields are 0.
     [[nodiscard]] static godot::Dictionary parse_log(const godot::String& text);
 
+    /// What a shove would do, without doing it: {error, events, units}, with
+    /// events and units shaped as take_events() and get_units() return them.
+    /// The core's own preview, so it is the outcome, not an estimate.
+    [[nodiscard]] godot::Dictionary preview_shove(int64_t engineer, int64_t dir) const;
+
     godot::String move(int64_t engineer, int64_t x, int64_t y);
     godot::String shove(int64_t engineer, int64_t dir);
     godot::String end_turn();
@@ -109,6 +114,8 @@ protected:
 
 private:
     godot::String apply(const Command& command);
+    [[nodiscard]] static godot::Array units_of(const Mission& mission);
+    [[nodiscard]] static godot::Array events_of(const std::vector<Event>& events);
 
     Mission mission_ = Mission::generate(0);
     MissionLog log_;

@@ -229,6 +229,15 @@ std::expected<void, Rejection> Mission::apply(const Command& command) {
 
 std::vector<Event> Mission::take_events() { return std::exchange(events_, {}); }
 
+std::expected<Mission, Rejection> Mission::preview(const Command& command) const {
+    Mission next = *this;
+    next.events_.clear();
+    if (auto result = next.apply(command); !result) {
+        return std::unexpected{result.error()};
+    }
+    return next;
+}
+
 std::expected<void, Rejection> Mission::check_engineer(UnitId id) const {
     if (id >= board_.unit_count() || board_.unit(id).kind != UnitKind::Engineer) {
         return std::unexpected{Rejection::NotAnEngineer};
