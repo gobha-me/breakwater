@@ -72,6 +72,8 @@ void BreakwaterMission::generate(int64_t seed) {
     const auto core_seed = std::bit_cast<std::uint64_t>(seed);
     mission_ = Mission::generate(core_seed);
     log_ = MissionLog{.seed = core_seed, .commands = {}};
+    undo_.clear();
+    undo_blocked_ = "nothing to undo";
 }
 
 bool BreakwaterMission::is_offered(int64_t seed) {
@@ -89,6 +91,8 @@ godot::String BreakwaterMission::load_log(const godot::String& text) {
     }
     mission_ = Mission::generate(parsed->seed);
     log_ = MissionLog{.seed = parsed->seed, .commands = {}};
+    undo_.clear();
+    undo_blocked_ = "nothing to undo";
     for (std::size_t i = 0; i < parsed->commands.size(); ++i) {
         if (const auto refused = apply(parsed->commands[i]); !refused.is_empty()) {
             (void)mission_.take_events();
@@ -133,12 +137,33 @@ godot::Dictionary BreakwaterMission::parse_log(const godot::String& text) {
 }
 
 godot::String BreakwaterMission::apply(const Command& command) {
+    Mission before = mission_;
     if (const auto result = mission_.apply(command); !result) {
         return to_godot(describe(result.error()));
+    }
+    if (std::holds_alternative<MoveCommand>(command)) {
+        undo_.emplace_back(std::move(before), log_.commands.size());
+    } else {
+        undo_.clear();
+        undo_blocked_ =
+            std::holds_alternative<ShoveCommand>(command) ? "a shove cannot be undone" : "the turn has ended";
     }
     log_.commands.push_back(command);
     return {};
 }
+
+godot::String BreakwaterMission::undo() {
+    if (undo_.empty()) {
+        return undo_blocked_;
+    }
+    auto [mission, log_size] = std::move(undo_.back());
+    undo_.pop_back();
+    mission_ = std::move(mission);
+    log_.commands.resize(log_size);
+    return {};
+}
+
+bool BreakwaterMission::can_undo() const { return !undo_.empty(); }
 
 godot::String BreakwaterMission::move(int64_t engineer, int64_t x, int64_t y) {
     return apply(MoveCommand{.engineer = to_unit_id(engineer), .to = {saturate(x), saturate(y)}});
@@ -280,6 +305,8 @@ void BreakwaterMission::_bind_methods() {
     ClassDB::bind_method(D_METHOD("move", "engineer", "x", "y"), &BreakwaterMission::move);
     ClassDB::bind_method(D_METHOD("shove", "engineer", "dir"), &BreakwaterMission::shove);
     ClassDB::bind_method(D_METHOD("end_turn"), &BreakwaterMission::end_turn);
+    ClassDB::bind_method(D_METHOD("undo"), &BreakwaterMission::undo);
+    ClassDB::bind_method(D_METHOD("can_undo"), &BreakwaterMission::can_undo);
     ClassDB::bind_method(D_METHOD("get_size"), &BreakwaterMission::get_size);
     ClassDB::bind_method(D_METHOD("get_seed"), &BreakwaterMission::get_seed);
     ClassDB::bind_method(D_METHOD("get_turn"), &BreakwaterMission::get_turn);

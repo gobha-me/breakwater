@@ -37,6 +37,7 @@ func _run() -> void:
 
 	_check_picking()
 	await _check_preview()
+	await _check_undo()
 	_main.restart(78)
 	_check(_main.mission.get_seed() == 79, "a rejected seed is never played: 78 starts mission 79")
 	await _key(KEY_N)
@@ -99,6 +100,23 @@ func _check_preview() -> void:
 	await _move_mouse(Vector2i(7, 7))
 	_check(_main.input.preview.shown.is_empty(), "moving off the target clears the preview")
 	await _key(KEY_ESCAPE)
+
+
+## Z takes back a move made by clicking, restoring the exact state.
+func _check_undo() -> void:
+	_main.restart(20)
+	await _frames(2)
+	var mission: BreakwaterMission = _main.mission
+	var before := mission.get_state_hash()
+	var u: Dictionary = mission.get_units()[1]
+	await _click(Vector2i(u["x"], u["y"]))
+	var to: Vector2i = mission.reachable(1)[0]
+	await _click(to)
+	_check(mission.get_state_hash() != before, "a clicked move changed the state")
+	await _key(KEY_Z)
+	_check(mission.get_state_hash() == before, "Z restores the exact state before the move")
+	await _key(KEY_Z)
+	_check(mission.get_state_hash() == before, "Z with nothing to undo changes nothing")
 
 
 func _move_mouse(c: Vector2i) -> void:
