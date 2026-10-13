@@ -26,6 +26,7 @@ const BoardView := preload("res://scripts/board_view.gd")
 const UnitsView := preload("res://scripts/units_view.gd")
 const Hud := preload("res://scripts/hud.gd")
 const PlayInput := preload("res://scripts/play_input.gd")
+const Hints := preload("res://scripts/hints.gd")
 
 @export var mission_seed := 20
 
@@ -34,6 +35,11 @@ var board: BoardView
 var units: UnitsView
 var hud: Hud
 var input: PlayInput
+var hints: Hints
+## What the player has done this mission, for the hints.
+var _acted := false
+var _shoved := false
+var _ended := false
 var playing := false
 var _base_speed := 1.0
 var _skipping := false
@@ -67,6 +73,11 @@ func _ready() -> void:
 	input.setup(self)
 
 	var args := _user_args()
+	# Hints are for people: scripted runs never show them, unless forced.
+	var scripted := args.has("log") or args.has("autoplay") or args.has("capture") or args.has("no-hints")
+	hints = Hints.new()
+	add_child(hints)
+	hints.setup(args.has("hints") or not scripted, not args.has("hints") and not scripted)
 	save_dir = args.get("save-dir", save_dir)
 	_base_speed = float(args.get("speed", "8" if args.has("autoplay") else "1"))
 	Engine.time_scale = _base_speed
@@ -89,10 +100,10 @@ func _ready() -> void:
 
 
 func _rebuild() -> void:
+	input.selected = -1
 	board.build(mission)
 	units.build(board)
 	_sync()
-	input.selected = -1
 	input.refresh()
 
 
@@ -109,6 +120,9 @@ func restart(seed: int) -> void:
 	var offered := seed if BreakwaterMission.is_offered(seed) else BreakwaterMission.next_offered(seed)
 	mission = BreakwaterMission.new()
 	mission.generate(offered)
+	_acted = false
+	_shoved = false
+	_ended = false
 	_rebuild()
 	hud.say("Mission %d: proven survivable." % offered if offered == seed
 			else "Seed %d is not proven survivable; mission %d instead." % [seed, offered])
@@ -153,6 +167,21 @@ func _sync() -> void:
 	board.sync()
 	units.sync(mission)
 	hud.sync(mission)
+	update_hints()
+
+
+## Feeds the hints what the player has done so far.
+func update_hints() -> void:
+	if hints != null:
+		hints.update({"turn": mission.get_turn(), "selected": input.selected >= 0, "acted": _acted,
+				"shoved": _shoved, "ended": _ended})
+
+
+## Called by the input after the mission accepts a player command.
+func note_command(verb: String) -> void:
+	_acted = _acted or verb in ["move", "shove"]
+	_shoved = _shoved or verb == "shove"
+	_ended = _ended or verb == "end"
 
 
 ## Plays back everything the mission reported since the last call, in order,
@@ -336,4 +365,6 @@ static func _user_args() -> Dictionary:
 		if arg.begins_with("--") and "=" in arg:
 			var key := arg.substr(2, arg.find("=") - 2)
 			args[key] = arg.substr(arg.find("=") + 1)
+		elif arg.begins_with("--"):
+			args[arg.substr(2)] = "true"  # A bare flag, e.g. --hints.
 	return args

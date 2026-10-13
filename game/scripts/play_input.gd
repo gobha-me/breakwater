@@ -12,6 +12,7 @@ extends Node3D
 ##   Space                  end the turn; during playback, skip to its end
 ##   Tab / Esc              next engineer / deselect
 ##   Z                      undo the last move (until a shove or end of turn)
+##   H / Shift+H            dismiss the current hint / no more hints
 ##   R / N                  restart this seed / next seed
 ##   F5                     save the game as a replayable log
 
@@ -213,6 +214,11 @@ func _unhandled_input(event: InputEvent) -> void:
 				cycle()
 			KEY_ESCAPE:
 				_select(-1)
+			KEY_H:
+				if event.shift_pressed:
+					main.hints.turn_off()
+				else:
+					main.hints.dismiss()
 			KEY_Z:
 				if _accepting():
 					main.undo()
@@ -234,6 +240,7 @@ func _apply(verb: String, err: String) -> void:
 		main.hud.say(err[0].to_upper() + err.substr(1) + ".")
 		return
 	main.hud.say("")
+	main.note_command(verb)
 	command_applied.emit(verb)
 	await main.play_events()
 	refresh()
@@ -243,6 +250,7 @@ func _select(id: int) -> void:
 	selected = id if id in _actionable_engineers() else -1
 	preview.clear()
 	_draw_marks()
+	main.update_hints()
 
 
 func _actionable_engineers() -> Array[int]:

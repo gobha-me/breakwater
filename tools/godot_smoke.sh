@@ -39,7 +39,7 @@ replay="build/dev/tools/replay/bw_replay"
 mkdir -p build && played="$(mktemp -d "$PWD/build/played.XXXXXX")"
 trap 'rm -rf "$played"' EXIT
 out="$(timeout 300 "$GODOT" --headless --path game --script res://tests/input_test.gd -- \
-    --save-dir="$played" --seeds=20,19 --play-logs="$PWD/tests/logs/win-seed20.log" 2>&1)" || status=1
+    --save-dir="$played" --seeds=20,19 --play-logs="$PWD/tests/logs/win-seed20.log" --no-hints 2>&1)" || status=1
 grep -E '^  (ok|FAIL)|^input:' <<<"$out" || true
 if grep -qE 'SCRIPT ERROR|^ERROR' <<<"$out" || ! grep -q '^input: PASS' <<<"$out"; then
     echo "  FAIL input test did not pass:"; grep -E 'SCRIPT ERROR|^ERROR|FAIL' <<<"$out" | head -5; status=1

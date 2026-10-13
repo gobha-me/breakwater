@@ -40,6 +40,7 @@ func _run() -> void:
 	await _check_undo()
 	await _check_strike_hover()
 	await _check_enemy_phase()
+	await _check_hints()
 	_main.restart(78)
 	_check(_main.mission.get_seed() == 79, "a rejected seed is never played: 78 starts mission 79")
 	await _key(KEY_N)
@@ -163,6 +164,33 @@ func _check_enemy_phase() -> void:
 			var root: Node3D = _main.units.root_of(int(u["id"]))
 			in_sync = in_sync and root != null and root.position.is_equal_approx(_main.board.top_of(Vector2i(u["x"], u["y"])))
 	_check(in_sync, "after skipping, every unit stands where the mission says")
+
+
+## Hints follow the first mission: each appears when relevant and retires
+## once the player does what it teaches. Run without persistence.
+func _check_hints() -> void:
+	_main.hints.setup(true, false)
+	_main.restart(20)
+	await _frames(2)
+	_check(_main.hints.showing == "select", "first hint: select an engineer (showing %s)" % _main.hints.showing)
+	var u: Dictionary = _main.mission.get_units()[1]
+	await _click(Vector2i(u["x"], u["y"]))
+	_check(_main.hints.showing == "act", "after selecting: what green and orange mean (showing %s)" % _main.hints.showing)
+	await _click(_main.mission.reachable(1)[0])
+	_check(_main.hints.showing == "strikes", "after moving: what red arrows mean")
+	await _key(KEY_H)
+	_check(_main.hints.showing == "tide", "H retires a hint: next, the tide (showing %s)" % _main.hints.showing)
+	await _key(KEY_SPACE)
+	await _settle()
+	_check(_main.hints.showing == "goal", "on turn 2: the goal")
+	var shift_h := InputEventKey.new()
+	shift_h.keycode = KEY_H
+	shift_h.shift_pressed = true
+	shift_h.pressed = true
+	Input.parse_input_event(shift_h)
+	await _frames(2)
+	_check(_main.hints.showing.is_empty() and not _main.hints.enabled, "Shift+H turns hints off")
+	_main.hints.setup(false, false)
 
 
 func _move_mouse(c: Vector2i) -> void:
