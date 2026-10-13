@@ -19,20 +19,9 @@ limit="${CAPTURE_TIMEOUT:-60}"
 mkdir -p "$(dirname "$out")"
 rm -f "$out"
 
-godot=("${GODOT_BIN:-godot}" --path game --resolution 1280x720)
 args=(-- --capture="$out" --capture-frames="$frames" "${extra[@]}")
-session_socket="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/wayland-0"
-
-if command -v xvfb-run >/dev/null; then
-    run=(xvfb-run -a -s "-screen 0 1280x720x24" "${godot[@]}" --display-driver x11 "${args[@]}")
-elif [[ -n "${WAYLAND_DISPLAY:-}" || -n "${DISPLAY:-}" ]]; then
-    run=("${godot[@]}" "${args[@]}")
-elif [[ -S "$session_socket" ]]; then
-    run=(env WAYLAND_DISPLAY=wayland-0 XDG_RUNTIME_DIR="$(dirname "$session_socket")" "${godot[@]}" --display-driver wayland "${args[@]}")
-else
-    echo "capture: no display; unlock the desktop session or install xvfb-run (Arch: xorg-server-xvfb)" >&2
-    exit 2
-fi
+source tools/display.sh
+run=("${display[@]}" "${GODOT_BIN:-godot}" --path game --resolution 1280x720 "${display_args[@]}" "${args[@]}")
 
 # One retry: a compositor occasionally fails to present the first window.
 status=0

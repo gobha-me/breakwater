@@ -11,6 +11,10 @@ extends Node3D
 ##   --autoplay=<path>   play a log's commands one by one through the scene,
 ##                       print the outcome and hash, and quit
 ##   --speed=<x>         playback speed multiplier (autoplay defaults to 8)
+##   --pace=<s>          autoplay: show each command's selection and shove
+##                       preview for <s> seconds first, as a player would see it
+##   --hold=<s>          autoplay: linger on the opening and the ending
+##   --watchdog=<s>      autoplay: real-time limit (default 120)
 ##   --save-dir=<path>   where F5 saves logs (default user://logs)
 ##   --select=<id> --hover=<x>,<y>
 ##                       select an engineer and hover a tile, as a player
@@ -61,10 +65,10 @@ func _ready() -> void:
 	if args.has("autoplay"):
 		# Real-time watchdog: a script error mid-autoplay must fail the run,
 		# not leave a headless process waiting forever.
-		get_tree().create_timer(120.0, true, false, true).timeout.connect(func() -> void:
+		get_tree().create_timer(float(args.get("watchdog", "120")), true, false, true).timeout.connect(func() -> void:
 			printerr("autoplay: timed out")
 			get_tree().quit(3))
-		_autoplay.call_deferred(args["autoplay"])
+		_autoplay.call_deferred(args["autoplay"], float(args.get("pace", "0")), float(args.get("hold", "0")))
 
 
 func _rebuild() -> void:
@@ -205,7 +209,7 @@ func _load_until(path: String, turns: int) -> void:
 
 ## Runs a log through the scene exactly as a player's commands would go, so
 ## the presentation is exercised headless. Prints the result and quits.
-func _autoplay(path: String) -> void:
+func _autoplay(path: String, pace: float, hold: float) -> void:
 	var parsed := BreakwaterMission.parse_log(FileAccess.get_file_as_string(path))
 	if not parsed["error"].is_empty():
 		printerr("autoplay: %s: %s" % [path, parsed["error"]])
@@ -213,9 +217,17 @@ func _autoplay(path: String) -> void:
 		return
 	mission.generate(parsed["seed"])
 	_rebuild()
+	await _wait(hold)
 	var index := 0
 	for c in parsed["commands"]:
 		index += 1
+		if pace > 0.0 and c["verb"] != "end":
+			# Show what a player would see before acting: the selection, and
+			# for a shove the preview of its outcome.
+			input.click(_engineer_tile(int(c["engineer"])))
+			if c["verb"] == "shove":
+				input.hover(_engineer_tile(int(c["engineer"])) + input.DIRS[int(c["dir"])])
+			await _wait(pace)
 		var err: String
 		match c["verb"]:
 			"move":
@@ -229,10 +241,17 @@ func _autoplay(path: String) -> void:
 			get_tree().quit(1)
 			return
 		await play_events()
+		input.refresh()
+	await _wait(hold)
 	var outcome: String = {BreakwaterMission.OUTCOME_WON: "won", BreakwaterMission.OUTCOME_LOST: "lost"}.get(
 			mission.get_outcome(), "in-progress")
 	print("autoplay: %d commands, outcome %s, hash %s" % [index, outcome, mission.get_state_hash_hex()])
 	get_tree().quit(0)
+
+
+func _wait(seconds: float) -> void:
+	if seconds > 0.0:
+		await get_tree().create_timer(seconds).timeout
 
 
 func _build_environment() -> void:
