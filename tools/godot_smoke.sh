@@ -13,7 +13,10 @@ GODOT="${GODOT_BIN:-godot}"
 mkdir -p game/.godot
 grep -qxF "res://bin/breakwater.gdextension" game/.godot/extension_list.cfg 2>/dev/null ||
     echo "res://bin/breakwater.gdextension" >> game/.godot/extension_list.cfg
-"$GODOT" --headless --path game --import >/dev/null 2>&1
+# The first import after another Godot build wrote .godot/ can abort once at
+# exit (docs/KNOWN_ISSUES.md); a second attempt has always passed.
+"$GODOT" --headless --path game --import >/dev/null 2>&1 ||
+    "$GODOT" --headless --path game --import >/dev/null 2>&1
 "$GODOT" --headless --path game --script res://tests/smoke.gd
 
 # Script errors, engine errors and leaks at exit all fail the gate: a

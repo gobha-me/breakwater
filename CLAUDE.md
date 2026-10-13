@@ -100,9 +100,11 @@ at a checkpoint named in `docs/ROADMAP.md`.
    captures) shown in the PR. Squash merge, delete the branch.
 6. **Next issue.** No idling between issues.
 
-CI runs the gates that need no display: format, ASan and UBSan, GCC, Clang,
-clang-tidy, replay determinism, seed proofs. The Godot smoke test and captures need a Godot binary and a display,
-so they stay local and their output belongs in the PR body.
+CI runs every gate that needs no display: format, ASan and UBSan, GCC, Clang,
+clang-tidy, replay determinism, seed proofs, and the Godot gates headless on
+the official 4.7.2 build (`tools/fetch_godot.sh`). Only the golden image and
+other captures need a display, so they stay local and their output belongs in
+the PR body.
 
 A decision that comes up mid-issue gets made and recorded in the issue, not
 escalated. Escalate only a checkpoint, or a discovery that invalidates the
