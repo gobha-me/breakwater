@@ -107,8 +107,8 @@ using Distances = std::array<int, kTileCount>;
         for (const Direction dir : kDirections) {
             const Coord target = step(dest, dir);
             const auto cls = in_bounds(target) ? target_class(board, target) : std::nullopt;
-            if (!cls) {
-                continue;
+            if (cls != 0) {
+                continue; // Only buildings are worth a detour.
             }
             const Plan plan{.target_class = *cls, .steps = distance.at(i), .dest = dest, .dir = dir};
             if (!best || plan.key() < best->key()) {
@@ -434,20 +434,32 @@ void Mission::plan_crawler(UnitId id) {
     const Coord from = board_.unit(id).pos;
     const auto distance =
         step_distances(from, kCrawlerMoveRange, [this](Coord c) { return crawler_can_enter(board_, c); });
+    // A building in reach is the target. Otherwise the crawler marches on the
+    // town, and strikes an engineer only if one is next to where it stops:
+    // engineers cannot lure crawlers away from the town.
     const auto plan = best_attack(board_, distance);
     const Coord dest = plan ? plan->dest : approach_town(board_, distance, from);
-
     if (dest != from) {
         board_.place(id, dest);
         events_.push_back({.kind = EventKind::UnitMoved, .unit = id, .from = from, .to = dest, .value = 0});
     }
-    intents_.at(id) = plan ? Intent{plan->dir} : std::nullopt;
-    if (plan) {
+    Intent intent = plan ? Intent{plan->dir} : std::nullopt;
+    if (!plan) {
+        for (const Direction dir : kDirections) {
+            const Coord target = step(dest, dir);
+            if (in_bounds(target) && target_class(board_, target) == 1) {
+                intent = dir;
+                break;
+            }
+        }
+    }
+    intents_.at(id) = intent;
+    if (intent) {
         events_.push_back({.kind = EventKind::IntentDeclared,
                            .unit = id,
                            .from = dest,
-                           .to = step(dest, plan->dir),
-                           .value = static_cast<int>(plan->dir)});
+                           .to = step(dest, *intent),
+                           .value = static_cast<int>(*intent)});
     }
 }
 

@@ -149,8 +149,8 @@ TEST_CASE("scripted mission: the solver's witness wins, with shoves", "[outcome]
 }
 
 TEST_CASE("scripted mission: idling on the beach loses every engineer", "[outcome][script]") {
-    auto [mission, hashes] = replay("loss-engineers-seed3.log");
-    CHECK(hashes == golden_hashes("loss-engineers-seed3.hashes"));
+    auto [mission, hashes] = replay("loss-engineers-seed17.log");
+    CHECK(hashes == golden_hashes("loss-engineers-seed17.hashes"));
     CHECK(mission.outcome() == Outcome::Lost);
     CHECK_FALSE(any_engineer_alive(mission.board()));
     CHECK(standing_buildings(mission.board()) > 0);

@@ -120,7 +120,9 @@ TEST_CASE("a turn runs its phases in the order the rules give", "[turn][pipeline
     const auto spawned = of_kind(events, EventKind::UnitSpawned);
     REQUIRE(spawned.size() == 1);
     CHECK(spawned.front().to == Coord{1, 6});
-    CHECK(mission.intent(c) == Intent{Direction::South});
+    // c replanned in the same phase: it marches on the town at (7,7).
+    CHECK_FALSE(of_kind(events, EventKind::UnitMoved).empty());
+    CHECK(mission.board().unit(c).pos != Coord{3, 3});
 }
 
 TEST_CASE("the rising tide drowns engineers and spares crawlers", "[turn][tide]") {
@@ -193,12 +195,13 @@ TEST_CASE("spawns come ashore at the waterline", "[turn][spawn]") {
 
     SECTION("a spawned crawler plans in the same enemy phase") {
         set_elevation(board, {7, 5}, 0);
+        add_building(board, {6, 7}); // In reach of the spawn tile: strike from (6,6).
         Mission mission = Mission::from_board(kSeed, board, {.intents = {}, .spawns = {0, 1, 0, 0, 0}});
         const auto events = end_turn(mission);
         const auto spawned = of_kind(events, EventKind::UnitSpawned);
         REQUIRE(spawned.size() == 1);
-        CHECK(mission.intent(spawned.front().unit) == Intent{Direction::South}); // The engineer at (7,7).
-        CHECK(mission.board().unit(spawned.front().unit).pos == Coord{7, 6});
+        CHECK(mission.intent(spawned.front().unit) == Intent{Direction::South}); // The building at (6,7).
+        CHECK(mission.board().unit(spawned.front().unit).pos == Coord{6, 6});
     }
 }
 

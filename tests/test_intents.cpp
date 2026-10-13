@@ -61,25 +61,7 @@ std::vector<Event> of_kind(const std::vector<Event>& events, EventKind kind) {
 } // namespace
 
 TEST_CASE("crawler intent follows the ranking key in docs/RULES.md", "[intent][plan]") {
-    SECTION("an adjacent engineer: stay and strike it") {
-        Board board = flat_board();
-        const auto c = board.add_unit(UnitKind::Crawler, {3, 3}, 2);
-        (void)board.add_unit(UnitKind::Engineer, {3, 4}, 2);
-        add_building(board, {6, 6});
-        Mission mission = scenario(board);
-        const auto events = end_turn(mission);
-        CHECK(mission.board().unit(c).pos == Coord{3, 3});
-        CHECK(mission.intent(c) == Intent{Direction::South});
-        CHECK(of_kind(events, EventKind::UnitMoved).empty());
-        CHECK(of_kind(events, EventKind::IntentDeclared) ==
-              std::vector<Event>{{.kind = EventKind::IntentDeclared,
-                                  .unit = c,
-                                  .from = {3, 3},
-                                  .to = {3, 4},
-                                  .value = static_cast<int>(Direction::South)}});
-    }
-
-    SECTION("a building outranks an engineer, even an adjacent one") {
+    SECTION("a building in reach is struck, even past an adjacent engineer") {
         Board board = flat_board();
         const auto c = board.add_unit(UnitKind::Crawler, {0, 0}, 2);
         (void)board.add_unit(UnitKind::Engineer, {0, 1}, 2);
@@ -90,7 +72,7 @@ TEST_CASE("crawler intent follows the ranking key in docs/RULES.md", "[intent][p
         CHECK(mission.intent(c) == Intent{Direction::East});
     }
 
-    SECTION("a building in reach when no engineer is; ties go to the lower row") {
+    SECTION("fewest steps first, then the lower row") {
         Board board = flat_board();
         const auto c = board.add_unit(UnitKind::Crawler, {0, 0}, 2);
         add_building(board, {2, 1});
@@ -106,8 +88,8 @@ TEST_CASE("crawler intent follows the ranking key in docs/RULES.md", "[intent][p
     SECTION("same row: the lower column wins") {
         Board board = flat_board();
         const auto c = board.add_unit(UnitKind::Crawler, {3, 1}, 2);
-        (void)board.add_unit(UnitKind::Engineer, {1, 1}, 2);
-        (void)board.add_unit(UnitKind::Engineer, {5, 1}, 2);
+        add_building(board, {1, 1});
+        add_building(board, {5, 1});
         Mission mission = scenario(board);
         (void)end_turn(mission);
         CHECK(mission.board().unit(c).pos == Coord{2, 1});
@@ -117,19 +99,19 @@ TEST_CASE("crawler intent follows the ranking key in docs/RULES.md", "[intent][p
     SECTION("same tile: North, East, South, West") {
         Board board = flat_board();
         const auto c = board.add_unit(UnitKind::Crawler, {3, 3}, 2);
-        (void)board.add_unit(UnitKind::Engineer, {4, 3}, 2);
-        (void)board.add_unit(UnitKind::Engineer, {3, 2}, 2);
+        add_building(board, {4, 3});
+        add_building(board, {3, 2});
         Mission mission = scenario(board);
         (void)end_turn(mission);
         CHECK(mission.board().unit(c).pos == Coord{3, 3});
         CHECK(mission.intent(c) == Intent{Direction::North});
     }
 
-    SECTION("nothing in reach: close on the town and declare no attack") {
+    SECTION("no building in reach: march on the town, ignoring an engineer it could reach") {
         Board board = flat_board();
         const auto c = board.add_unit(UnitKind::Crawler, {0, 0}, 2);
         add_building(board, {0, 7});
-        (void)board.add_unit(UnitKind::Engineer, {7, 0}, 2);
+        (void)board.add_unit(UnitKind::Engineer, {3, 1}, 2);
         Mission mission = scenario(board);
         const auto events = end_turn(mission);
         CHECK(mission.board().unit(c).pos == Coord{0, 3}); // Three steps: the crawler's full reach.
@@ -139,14 +121,29 @@ TEST_CASE("crawler intent follows the ranking key in docs/RULES.md", "[intent][p
               std::vector<Event>{{.kind = EventKind::UnitMoved, .unit = c, .from = {0, 0}, .to = {0, 3}, .value = 0}});
     }
 
-    SECTION("no building standing and nothing in reach: hold position") {
+    SECTION("an engineer next to where it stops is struck") {
         Board board = flat_board();
         const auto c = board.add_unit(UnitKind::Crawler, {0, 0}, 2);
+        add_building(board, {0, 7});
+        (void)board.add_unit(UnitKind::Engineer, {1, 3}, 2);
+        Mission mission = scenario(board);
+        (void)end_turn(mission);
+        CHECK(mission.board().unit(c).pos == Coord{0, 3});
+        CHECK(mission.intent(c) == Intent{Direction::East});
+    }
+
+    SECTION("no building standing: hold, and strike an adjacent engineer if any") {
+        Board board = flat_board();
+        const auto lonely = board.add_unit(UnitKind::Crawler, {0, 0}, 2);
+        const auto beside = board.add_unit(UnitKind::Crawler, {5, 5}, 2);
         (void)board.add_unit(UnitKind::Engineer, {7, 7}, 2);
+        (void)board.add_unit(UnitKind::Engineer, {5, 6}, 2);
         Mission mission = scenario(board);
         const auto events = end_turn(mission);
-        CHECK(mission.board().unit(c).pos == Coord{0, 0});
-        CHECK_FALSE(mission.intent(c).has_value());
+        CHECK(mission.board().unit(lonely).pos == Coord{0, 0});
+        CHECK_FALSE(mission.intent(lonely).has_value());
+        CHECK(mission.board().unit(beside).pos == Coord{5, 5});
+        CHECK(mission.intent(beside) == Intent{Direction::South});
         CHECK(of_kind(events, EventKind::UnitMoved).empty());
     }
 
@@ -154,7 +151,7 @@ TEST_CASE("crawler intent follows the ranking key in docs/RULES.md", "[intent][p
         Board board = flat_board();
         const auto first = board.add_unit(UnitKind::Crawler, {3, 1}, 2);
         const auto second = board.add_unit(UnitKind::Crawler, {2, 1}, 2);
-        (void)board.add_unit(UnitKind::Engineer, {3, 3}, 2);
+        add_building(board, {3, 3});
         Mission mission = scenario(board);
         (void)end_turn(mission);
         CHECK(mission.board().unit(first).pos == Coord{3, 2});
@@ -168,9 +165,9 @@ TEST_CASE("crawler intent follows the ranking key in docs/RULES.md", "[intent][p
         Board board = flat_board();
         const auto c = board.add_unit(UnitKind::Crawler, {3, 0}, 2);
         add_water(board, {3, 1});
-        // Every tile next to the engineer is four land steps away; (3,2) is
+        // Every tile next to the building is four land steps away; (3,2) is
         // two steps through the water at (3,1).
-        (void)board.add_unit(UnitKind::Engineer, {3, 3}, 2);
+        add_building(board, {3, 3});
         Mission mission = scenario(board);
         (void)end_turn(mission);
         CHECK(mission.board().unit(c).pos == Coord{3, 2});
@@ -182,7 +179,9 @@ TEST_CASE("intents are published before the player acts and hold through it", "[
     Board board = flat_board();
     const auto c = board.add_unit(UnitKind::Crawler, {3, 2}, 2);
     const auto e = board.add_unit(UnitKind::Engineer, {3, 4}, 2);
-    add_building(board, {7, 7});
+    // Out of strike reach (the engineer holds its only near approach), so the
+    // crawler marches to (3,3) and strikes the engineer beside it.
+    add_building(board, {3, 5});
     Mission mission = scenario(board);
     (void)end_turn(mission);
     REQUIRE(mission.board().unit(c).pos == Coord{3, 3});
