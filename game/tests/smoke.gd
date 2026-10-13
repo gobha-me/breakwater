@@ -52,25 +52,39 @@ func _run_mission_checks() -> void:
 	_check(fresh.move(0, 99, 99) == "destination is out of reach", "far move refused with the core's reason")
 	_check(fresh.move(-5, 0, 0) == "not an engineer", "negative id refused")
 	_check(fresh.move(3, 0, 0) == "not an engineer", "crawler id refused")
-	_check(fresh.move(0, 9223372036854775807, -9223372036854775807) == "destination is out of reach",
-			"int64 extremes refused, not crashed")
+	_check(
+		fresh.move(0, 9223372036854775807, -9223372036854775807) == "destination is out of reach",
+		"int64 extremes refused, not crashed"
+	)
 	_check(fresh.shove(0, 7) == "unknown direction", "bad direction refused")
 	_check(fresh.get_state_hash() == before, "refusals change nothing")
 	var to: Vector2i = fresh.reachable(0)[0]
 	_check(fresh.move(0, to.x, to.y) == "", "a reachable move is accepted")
 	var events := fresh.take_events()
-	_check(events.size() == 1 and events[0]["kind"] == BreakwaterMission.EVENT_UNIT_MOVED
-			and events[0]["to"] == to, "the move is reported as an event")
+	_check(
+		events.size() == 1 and events[0]["kind"] == BreakwaterMission.EVENT_UNIT_MOVED and events[0]["to"] == to,
+		"the move is reported as an event"
+	)
 	_check(fresh.get_units()[0]["action"] == BreakwaterMission.ACTION_MOVED, "engineer 0 has moved")
 	_check(fresh.get_log().ends_with("move 0 %d %d\n" % [to.x, to.y]), "accepted commands are recorded")
-	_check(BreakwaterMission.is_offered(20) and not BreakwaterMission.is_offered(78)
-			and not BreakwaterMission.is_offered(1000) and not BreakwaterMission.is_offered(-1),
-			"offered seeds: proven ones in 0-999 only")
-	_check(BreakwaterMission.next_offered(77) == 79 and BreakwaterMission.next_offered(999) == 0,
-			"next offered seed skips rejected ones and wraps")
+	_check(
+		(
+			BreakwaterMission.is_offered(20)
+			and not BreakwaterMission.is_offered(78)
+			and not BreakwaterMission.is_offered(1000)
+			and not BreakwaterMission.is_offered(-1)
+		),
+		"offered seeds: proven ones in 0-999 only"
+	)
+	_check(
+		BreakwaterMission.next_offered(77) == 79 and BreakwaterMission.next_offered(999) == 0,
+		"next offered seed skips rejected ones and wraps"
+	)
 	_run_undo_checks()
-	_check(fresh.load_log("breakwater-log 1\nseed 1\nfly 0\n") == "line 3: unknown command 'fly'",
-			"malformed log reported with its line")
+	_check(
+		fresh.load_log("breakwater-log 1\nseed 1\nfly 0\n") == "line 3: unknown command 'fly'",
+		"malformed log reported with its line"
+	)
 
 
 func _run_undo_checks() -> void:
@@ -94,7 +108,8 @@ func _run_undo_checks() -> void:
 	for e in 3:
 		for d in 4:
 			if not shoved and m.preview_shove(e, d)["error"].is_empty():
-				m.move(e, m.reachable(e)[0].x, m.reachable(e)[0].y) if not m.reachable(e).is_empty() else null
+				if not m.reachable(e).is_empty():
+					m.move(e, m.reachable(e)[0].x, m.reachable(e)[0].y)
 				shoved = m.shove(e, d) == ""
 	if shoved:
 		_check(m.undo() == "a shove cannot be undone", "a shove is final")

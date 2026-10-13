@@ -7,6 +7,9 @@ const ACTION_NAMES := {
 	BreakwaterMission.ACTION_DONE: "done",
 }
 
+## The last enemy-phase step announced: for the input test.
+var last_step := ""
+
 var _status: Label
 var _engineers: Label
 var _message: Label
@@ -14,8 +17,6 @@ var _banner: Label
 var _hints: Label
 var _step: Label
 var _step_tween: Tween
-## The last enemy-phase step announced: for the input test.
-var last_step := ""
 
 
 func _ready() -> void:
@@ -41,8 +42,10 @@ func _ready() -> void:
 	_hints.add_theme_font_size_override("font_size", 16)
 	_hints.add_theme_constant_override("outline_size", 6)
 	_hints.add_theme_color_override("font_outline_color", Color(0, 0, 0))
-	_hints.text = ("Click an engineer   ·   green: move   ·   orange or WASD: shove   ·   Space: end turn"
-			+ "   ·   Z undo move   ·   Tab / Esc   ·   R restart   ·   N next   ·   F5 save")
+	_hints.text = (
+		"Click an engineer   ·   green: move   ·   orange or WASD: shove   ·   Space: end turn"
+		+ "   ·   Z undo move   ·   Tab / Esc   ·   R restart   ·   N next   ·   F5 save"
+	)
 	add_child(_hints)
 
 	_step = Label.new()
@@ -70,8 +73,10 @@ func _ready() -> void:
 func sync(mission: BreakwaterMission) -> void:
 	var tide := mission.get_tide()
 	var over := mission.get_outcome() != BreakwaterMission.OUTCOME_IN_PROGRESS
-	_status.text = ("Turn %d / %d     Tide %d" % [mission.get_turn(), mission.get_turn_count(), tide]
-			+ ("" if over else "  (next %d)" % (tide + 1)))
+	_status.text = (
+		"Turn %d / %d     Tide %d" % [mission.get_turn(), mission.get_turn_count(), tide]
+		+ ("" if over else "  (next %d)" % (tide + 1))
+	)
 	var lines: PackedStringArray = []
 	for u in mission.get_units():
 		if not u["engineer"]:

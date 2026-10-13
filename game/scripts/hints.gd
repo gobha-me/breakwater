@@ -6,23 +6,35 @@ extends CanvasLayer
 ## gates and the golden are unaffected; --hints forces them on for review.
 
 const SETTINGS := "user://settings.cfg"
-
 ## In the order they are taught. Each entry: id, text.
 const HINTS := [
 	["select", "Click one of your engineers to select it."],
-	["act", "Green tiles: where it can move.\nOrange: units it can shove away. Hover one to see exactly what the shove will do."],
-	["strikes", "Red arrows are next turn's crawler strikes. A strike razes a cottage or fells an engineer.\nShove a crawler and its strike turns with it."],
-	["tide", "Blue hatching marks tiles the next tide will flood. Engineers drown in water.\nPress Space to end your turn."],
+	[
+		"act",
+		"Green tiles: where it can move.\nOrange: units it can shove away. Hover one to see exactly what the shove will do."
+	],
+	[
+		"strikes",
+		(
+			"Red arrows are next turn's crawler strikes. A strike razes a cottage or fells an engineer."
+			+ "\nShove a crawler and its strike turns with it."
+		)
+	],
+	[
+		"tide",
+		"Blue hatching marks tiles the next tide will flood. Engineers drown in water.\nPress Space to end your turn."
+	],
 	["goal", "Hold the town for 5 turns: keep at least one cottage and one engineer standing."],
 ]
 
 var enabled := true
+## The hint on screen, or "": for the input test.
+var showing := ""
+
 var _persist := true
 var _seen := {}
 var _panel: PanelContainer
 var _label: Label
-## The hint on screen, or "": for the input test.
-var showing := ""
 var _last_state := {}
 
 

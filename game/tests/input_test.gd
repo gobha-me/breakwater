@@ -72,14 +72,19 @@ func _check_picking() -> void:
 				exact += 1
 			elif not occupied.has(picked):
 				_check(false, "tile %s picked as %s" % [c, picked])
-	_check(exact >= tiles - occupied.size() * 2, "picking: %d of %d tiles exact, rest covered by units" % [exact, tiles])
+	_check(
+		exact >= tiles - occupied.size() * 2, "picking: %d of %d tiles exact, rest covered by units" % [exact, tiles]
+	)
 	for c in occupied:
 		var body: Vector3 = _main.board.top_of(c) + Vector3(0, 0.3, 0)
 		var picked: Vector2i = _main.input.pick(camera.unproject_position(body))
 		# A unit standing in front, nearer the camera, may cover one behind it;
 		# WASD shoves reach the covered one.
 		var covered: bool = picked != c and occupied.has(picked) and picked.y > c.y
-		_check(picked == c or covered, "unit at %s picked by its body%s" % [c, " (covered by %s)" % picked if covered else ""])
+		_check(
+			picked == c or covered,
+			"unit at %s picked by its body%s" % [c, " (covered by %s)" % picked if covered else ""]
+		)
 
 
 ## Hovering a shove target with an engineer selected shows the core's
@@ -96,9 +101,14 @@ func _check_preview() -> void:
 	var before := mission.get_state_hash()
 	await _move_mouse(target)
 	var expected: Dictionary = mission.preview_shove(0, BreakwaterMission.DIR_EAST)
-	_check(not _main.input.preview.shown.is_empty() and _main.input.preview.get_child_count() > 0,
-			"hovering a shove target shows a preview")
-	_check(expected["error"].is_empty() and not expected["events"].is_empty(), "the bridge's preview has the shove's events")
+	_check(
+		not _main.input.preview.shown.is_empty() and _main.input.preview.get_child_count() > 0,
+		"hovering a shove target shows a preview"
+	)
+	_check(
+		expected["error"].is_empty() and not expected["events"].is_empty(),
+		"the bridge's preview has the shove's events"
+	)
 	_check(mission.get_state_hash() == before and mission.take_events().is_empty(), "previewing changes nothing")
 	await _move_mouse(Vector2i(7, 7))
 	_check(_main.input.preview.shown.is_empty(), "moving off the target clears the preview")
@@ -162,7 +172,9 @@ func _check_enemy_phase() -> void:
 	for u in _main.mission.get_units():
 		if u["alive"]:
 			var root: Node3D = _main.units.root_of(int(u["id"]))
-			in_sync = in_sync and root != null and root.position.is_equal_approx(_main.board.top_of(Vector2i(u["x"], u["y"])))
+			in_sync = (
+				in_sync and root != null and root.position.is_equal_approx(_main.board.top_of(Vector2i(u["x"], u["y"])))
+			)
 	_check(in_sync, "after skipping, every unit stands where the mission says")
 
 
@@ -175,7 +187,9 @@ func _check_hints() -> void:
 	_check(_main.hints.showing == "select", "first hint: select an engineer (showing %s)" % _main.hints.showing)
 	var u: Dictionary = _main.mission.get_units()[1]
 	await _click(Vector2i(u["x"], u["y"]))
-	_check(_main.hints.showing == "act", "after selecting: what green and orange mean (showing %s)" % _main.hints.showing)
+	_check(
+		_main.hints.showing == "act", "after selecting: what green and orange mean (showing %s)" % _main.hints.showing
+	)
 	await _click(_main.mission.reachable(1)[0])
 	_check(_main.hints.showing == "strikes", "after moving: what red arrows mean")
 	await _key(KEY_H)
@@ -226,7 +240,9 @@ func _play_by_clicks(seed: int) -> void:
 			if crawler.x < 0:
 				var tiles: Array = mission.reachable(id)
 				if not tiles.is_empty():
-					tiles.sort_custom(func(a: Vector2i, b: Vector2i) -> bool: return a.y > b.y or (a.y == b.y and a.x < b.x))
+					tiles.sort_custom(
+						func(a: Vector2i, b: Vector2i) -> bool: return a.y > b.y or (a.y == b.y and a.x < b.x)
+					)
 					await _click(tiles[0])
 					clicks += 1
 					crawler = _shovable_crawler(mission, id)
@@ -240,12 +256,19 @@ func _play_by_clicks(seed: int) -> void:
 				shoves += 1
 		if mission.get_outcome() == BreakwaterMission.OUTCOME_IN_PROGRESS:
 			await _key(KEY_SPACE)
-	_check(mission.get_outcome() != BreakwaterMission.OUTCOME_IN_PROGRESS, "seed %d played to an ending by input alone" % seed)
+	_check(
+		mission.get_outcome() != BreakwaterMission.OUTCOME_IN_PROGRESS,
+		"seed %d played to an ending by input alone" % seed
+	)
 	var outcome: String = "won" if mission.get_outcome() == BreakwaterMission.OUTCOME_WON else "lost"
 	var saved: String = _main.save_log()
 	_check(not saved.is_empty(), "seed %d saved with F5's handler" % seed)
-	print("played: seed %d, %s, %d clicks, %d shoves, hash %s, log %s" % [
-			seed, outcome, clicks, shoves, mission.get_state_hash_hex(), saved])
+	print(
+		(
+			"played: seed %d, %s, %d clicks, %d shoves, hash %s, log %s"
+			% [seed, outcome, clicks, shoves, mission.get_state_hash_hex(), saved]
+		)
+	)
 
 
 ## Enters every command of a log as mouse clicks and key presses, then saves
@@ -277,11 +300,16 @@ func _play_log_by_input(path: String) -> void:
 			return
 		entered += 1
 	var outcome: String = {BreakwaterMission.OUTCOME_WON: "won", BreakwaterMission.OUTCOME_LOST: "lost"}.get(
-			mission.get_outcome(), "in-progress")
+		mission.get_outcome(), "in-progress"
+	)
 	_check(entered == parsed["commands"].size(), "%s: all %d commands entered by input" % [path, entered])
 	var saved: String = _main.save_log()
-	print("played: seed %d, %s, %d commands by input, hash %s, log %s" % [
-			mission.get_seed(), outcome, entered, mission.get_state_hash_hex(), saved])
+	print(
+		(
+			"played: seed %d, %s, %d commands by input, hash %s, log %s"
+			% [mission.get_seed(), outcome, entered, mission.get_state_hash_hex(), saved]
+		)
+	)
 
 
 ## A crawler next to engineer `id` that a shove would push north, toward the

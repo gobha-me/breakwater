@@ -27,6 +27,27 @@ const UnitsView := preload("res://scripts/units_view.gd")
 const Hud := preload("res://scripts/hud.gd")
 const PlayInput := preload("res://scripts/play_input.gd")
 const Hints := preload("res://scripts/hints.gd")
+## Events only an enemy phase produces; a playback containing any is one.
+const ENEMY_PHASE_EVENTS := [
+	BreakwaterMission.EVENT_ATTACK_RESOLVED,
+	BreakwaterMission.EVENT_TIDE_ROSE,
+	BreakwaterMission.EVENT_UNIT_SPAWNED,
+	BreakwaterMission.EVENT_TURN_STARTED
+]
+## Events a crawler performs, for the acting-crawler marker.
+const ACTOR_EVENTS := [
+	BreakwaterMission.EVENT_ATTACK_RESOLVED,
+	BreakwaterMission.EVENT_INTENT_DECLARED,
+	BreakwaterMission.EVENT_UNIT_SPAWNED,
+	BreakwaterMission.EVENT_UNIT_MOVED
+]
+const STEP_NAMES := {
+	BreakwaterMission.EVENT_ATTACK_RESOLVED: "Crawlers strike",
+	BreakwaterMission.EVENT_TIDE_ROSE: "The tide rises",
+	BreakwaterMission.EVENT_UNIT_SPAWNED: "Crawlers come ashore",
+	BreakwaterMission.EVENT_UNIT_MOVED: "Crawlers move and take aim",
+	BreakwaterMission.EVENT_INTENT_DECLARED: "Crawlers move and take aim",
+}
 
 @export var mission_seed := 20
 
@@ -36,28 +57,15 @@ var units: UnitsView
 var hud: Hud
 var input: PlayInput
 var hints: Hints
+var playing := false
+var save_dir := "user://logs"
+
 ## What the player has done this mission, for the hints.
 var _acted := false
 var _shoved := false
 var _ended := false
-var playing := false
 var _base_speed := 1.0
 var _skipping := false
-
-## Events only an enemy phase produces; a playback containing any is one.
-const ENEMY_PHASE_EVENTS := [BreakwaterMission.EVENT_ATTACK_RESOLVED, BreakwaterMission.EVENT_TIDE_ROSE,
-		BreakwaterMission.EVENT_UNIT_SPAWNED, BreakwaterMission.EVENT_TURN_STARTED]
-## Events a crawler performs, for the acting-crawler marker.
-const ACTOR_EVENTS := [BreakwaterMission.EVENT_ATTACK_RESOLVED, BreakwaterMission.EVENT_INTENT_DECLARED,
-		BreakwaterMission.EVENT_UNIT_SPAWNED, BreakwaterMission.EVENT_UNIT_MOVED]
-const STEP_NAMES := {
-	BreakwaterMission.EVENT_ATTACK_RESOLVED: "Crawlers strike",
-	BreakwaterMission.EVENT_TIDE_ROSE: "The tide rises",
-	BreakwaterMission.EVENT_UNIT_SPAWNED: "Crawlers come ashore",
-	BreakwaterMission.EVENT_UNIT_MOVED: "Crawlers move and take aim",
-	BreakwaterMission.EVENT_INTENT_DECLARED: "Crawlers move and take aim",
-}
-var save_dir := "user://logs"
 
 
 func _ready() -> void:
@@ -93,9 +101,11 @@ func _ready() -> void:
 	if args.has("autoplay"):
 		# Real-time watchdog: a script error mid-autoplay must fail the run,
 		# not leave a headless process waiting forever.
-		get_tree().create_timer(float(args.get("watchdog", "120")), true, false, true).timeout.connect(func() -> void:
-			printerr("autoplay: timed out")
-			get_tree().quit(3))
+		get_tree().create_timer(float(args.get("watchdog", "120")), true, false, true).timeout.connect(
+			func() -> void:
+				printerr("autoplay: timed out")
+				get_tree().quit(3)
+		)
 		_autoplay.call_deferred(args["autoplay"], float(args.get("pace", "0")), float(args.get("hold", "0")))
 
 
@@ -124,8 +134,13 @@ func restart(seed: int) -> void:
 	_shoved = false
 	_ended = false
 	_rebuild()
-	hud.say("Mission %d: proven survivable." % offered if offered == seed
-			else "Seed %d is not proven survivable; mission %d instead." % [seed, offered])
+	hud.say(
+		(
+			"Mission %d: proven survivable." % offered
+			if offered == seed
+			else "Seed %d is not proven survivable; mission %d instead." % [seed, offered]
+		)
+	)
 
 
 ## Takes back the last move, if it can be taken back.
@@ -148,8 +163,9 @@ func next_mission() -> void:
 ## returns its absolute path ("" on failure).
 func save_log() -> String:
 	DirAccess.make_dir_recursive_absolute(save_dir)
-	var path := save_dir.path_join("breakwater-seed%d-turn%d-%d.log" % [
-			mission.get_seed(), mission.get_turn(), Time.get_unix_time_from_system()])
+	var path := save_dir.path_join(
+		"breakwater-seed%d-turn%d-%d.log" % [mission.get_seed(), mission.get_turn(), Time.get_unix_time_from_system()]
+	)
 	var file := FileAccess.open(path, FileAccess.WRITE)
 	if file == null:
 		hud.say("Could not save %s." % path)
@@ -173,8 +189,15 @@ func _sync() -> void:
 ## Feeds the hints what the player has done so far.
 func update_hints() -> void:
 	if hints != null:
-		hints.update({"turn": mission.get_turn(), "selected": input.selected >= 0, "acted": _acted,
-				"shoved": _shoved, "ended": _ended})
+		hints.update(
+			{
+				"turn": mission.get_turn(),
+				"selected": input.selected >= 0,
+				"acted": _acted,
+				"shoved": _shoved,
+				"ended": _ended
+			}
+		)
 
 
 ## Called by the input after the mission accepts a player command.
@@ -324,7 +347,8 @@ func _autoplay(path: String, pace: float, hold: float) -> void:
 		input.refresh()
 	await _wait(hold)
 	var outcome: String = {BreakwaterMission.OUTCOME_WON: "won", BreakwaterMission.OUTCOME_LOST: "lost"}.get(
-			mission.get_outcome(), "in-progress")
+		mission.get_outcome(), "in-progress"
+	)
 	print("autoplay: %d commands, outcome %s, hash %s" % [index, outcome, mission.get_state_hash_hex()])
 	get_tree().quit(0)
 

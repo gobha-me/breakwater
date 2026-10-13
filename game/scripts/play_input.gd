@@ -16,26 +16,23 @@ extends Node3D
 ##   R / N                  restart this seed / next seed
 ##   F5                     save the game as a replayable log
 
+## Emitted with the command's verb after the mission accepts it.
+signal command_applied(verb: String)
+
 const BoardView := preload("res://scripts/board_view.gd")
 const UnitsView := preload("res://scripts/units_view.gd")
 const Hud := preload("res://scripts/hud.gd")
-
 const DIRS := [Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0)]
 const MOVE_COLOR := Color(0.3, 0.95, 0.4, 0.45)
 const SHOVE_COLOR := Color(1.0, 0.6, 0.1, 0.6)
 const SELECT_COLOR := Color(1.0, 0.95, 0.3, 0.7)
-
-## Emitted with the command's verb after the mission accepts it.
-signal command_applied(verb: String)
+const PreviewView := preload("res://scripts/preview_view.gd")
 
 var main: Node3D
 var selected := -1
-var _marks: Node3D
-
-
-const PreviewView := preload("res://scripts/preview_view.gd")
-
 var preview: PreviewView
+
+var _marks: Node3D
 
 
 func setup(owner_scene: Node3D) -> void:
@@ -62,8 +59,12 @@ func hover(c: Vector2i, crawler := -2) -> void:
 		return
 	var dir := DIRS.find(c - _selected_pos())
 	var mission: BreakwaterMission = main.mission
-	preview.show_preview("%d:%d:%s" % [selected, dir, mission.get_state_hash_hex()], mission.get_units(),
-			mission.preview_shove(selected, dir), mission.get_unit_max_hp())
+	preview.show_preview(
+		"%d:%d:%s" % [selected, dir, mission.get_state_hash_hex()],
+		mission.get_units(),
+		mission.preview_shove(selected, dir),
+		mission.get_unit_max_hp()
+	)
 
 
 ## The tile under a screen position, or (-1, -1): the nearest box the camera

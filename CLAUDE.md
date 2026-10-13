@@ -20,7 +20,9 @@ captures, replay hashes), never just claim completion.
 
 `tools/check.sh` runs all of them and stops at the first failure:
 
-1. `tools/format.sh --check`: clang-format (run `tools/format.sh` to fix).
+1. `tools/format.sh --check`: clang-format (run `tools/format.sh` to fix), then
+   `tools/gdlint.sh`: gdformat and gdlint for GDScript at 120 columns
+   (`tools/gdlint.sh --fix` reformats).
 2. ASan+UBSan build and tests (`asan` preset).
 3. GCC build and tests (`gcc` preset).
 4. Clang dev build and tests, including the extension (`dev` preset).
