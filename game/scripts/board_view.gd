@@ -12,6 +12,9 @@ const SAND := [Color(0.85, 0.78, 0.55), Color(0.82, 0.76, 0.54), Color(0.75, 0.7
 const FLOODED := Color(0.25, 0.42, 0.55)
 const NEXT_FLOOD := Color(0.3, 0.6, 0.95, 0.55)
 const HOUSE := Color(0.78, 0.42, 0.32)
+const BUILDING_RING := Color(1.0, 0.82, 0.35)
+## A cottage below full HP: a dark wash over the model that reads as damaged.
+const DAMAGED := Color(0.08, 0.04, 0.02, 0.5)
 const COTTAGE_MODEL := "res://assets/models/cottage.glb"
 const SEAWALL_MODEL := "res://assets/models/seawall.glb"
 const RUBBLE := Color(0.22, 0.16, 0.12)  # Dark, so a razed house reads against the grey high ground.
@@ -20,7 +23,7 @@ var _mission: BreakwaterMission
 var _size := 0
 var _tile_mats: Array[StandardMaterial3D] = []
 var _next_marks: Array[MeshInstance3D] = []
-var _houses := {}  # Vector2i -> {"body": MeshInstance3D, "mat": StandardMaterial3D, "label": Label3D}
+var _houses := {}  # Vector2i -> {"body", "rubble", "flash", "label", "ring"}
 var _water: MeshInstance3D
 
 
@@ -81,7 +84,7 @@ func flash_building(c: Vector2i, hp: int) -> Tween:
 		return null
 	var flash: StandardMaterial3D = house["flash"]
 	var tween := create_tween()
-	tween.tween_property(flash, "albedo_color:a", 0.0, 0.3).from(0.75)
+	tween.tween_property(flash, "albedo_color", Color(1, 0.2, 0.1, 0.0), 0.3).from(Color(1, 0.2, 0.1, 0.75))
 	tween.tween_callback(func() -> void: _show_house(c, hp))
 	return tween
 
@@ -109,7 +112,7 @@ func _build_tile(c: Vector2i) -> void:
 
 	if _mission.get_building_hp(c.x, c.y) > 0:
 		var top := Vector3(c.x * TILE, height, c.y * TILE)
-		var body := ModelFit.instance(COTTAGE_MODEL, 0.92, 1.0)
+		var body := ModelFit.instance(COTTAGE_MODEL, 0.76, 0.95)
 		if body == null:
 			body = _box(Vector3(0.55, 0.6, 0.55))
 			body.position.y = 0.3
@@ -127,13 +130,19 @@ func _build_tile(c: Vector2i) -> void:
 		(rubble as MeshInstance3D).material_override.albedo_color = RUBBLE
 		rubble.position = top + Vector3(0, 0.09, 0)
 		add_child(rubble)
+		# Health on the ground, as for units: a segmented ring round the
+		# footprint. The ✕ label only marks rubble.
+		var ring := HealthRing.new()
+		ring.setup(_mission.get_building_max_hp(), 0.4, 0.48, BUILDING_RING)
+		ring.position = top
+		add_child(ring)
 		var label := Label3D.new()
 		label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 		label.font_size = 64
 		label.outline_size = 14
-		label.position = top + Vector3(0, 1.15, 0)
+		label.position = top + Vector3(0, 0.45, 0)
 		add_child(label)
-		_houses[c] = {"body": holder, "rubble": rubble, "flash": flash, "label": label}
+		_houses[c] = {"body": holder, "rubble": rubble, "flash": flash, "label": label, "ring": ring}
 
 
 func _show_house(c: Vector2i, hp: int) -> void:
@@ -141,14 +150,13 @@ func _show_house(c: Vector2i, hp: int) -> void:
 	var label: Label3D = house["label"]
 	(house["body"] as Node3D).visible = hp > 0
 	(house["rubble"] as Node3D).visible = hp <= 0
-	if hp > 0:
-		label.text = "■".repeat(hp)
-		label.modulate = Color(1, 0.9, 0.6)
-		label.position.y = tile_top(_mission.get_elevation(c.x, c.y)) + 1.15
-	else:
-		label.text = "✕"
-		label.modulate = Color(1, 0.4, 0.3)
-		label.position.y = tile_top(_mission.get_elevation(c.x, c.y)) + 0.45
+	var ring: HealthRing = house["ring"]
+	ring.visible = hp > 0
+	ring.show_hp(hp)
+	var flash: StandardMaterial3D = house["flash"]
+	flash.albedo_color = DAMAGED if hp > 0 and hp < _mission.get_building_max_hp() else Color(1, 0.2, 0.1, 0.0)
+	label.text = "" if hp > 0 else "✕"
+	label.modulate = Color(1, 0.4, 0.3)
 
 
 func _build_water() -> void:

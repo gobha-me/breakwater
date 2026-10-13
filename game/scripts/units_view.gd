@@ -5,12 +5,18 @@ extends Node3D
 
 const ENGINEER_COLORS := [Color(0.95, 0.55, 0.15), Color(0.2, 0.75, 0.75), Color(0.65, 0.4, 0.9)]
 const CRAWLER_COLOR := Color(0.2, 0.45, 0.25)
+const CRAWLER_RING := Color(0.9, 0.15, 0.1)
+## The model's resting overlay below full HP: a dark wash that reads as hurt.
+const HURT := Color(0.1, 0.02, 0.02, 0.45)
+const CLEAR := Color(1, 0.15, 0.1, 0.0)
+const FLASH := Color(1, 0.15, 0.1, 0.75)
 const STRIKE_COLOR := Color(0.95, 0.15, 0.1)
 const DIRS := [Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0)]
 const BoardView := preload("res://scripts/board_view.gd")
 
 var _board: BoardView
-var _units := {}  # id -> {"root": Node3D, "mat": StandardMaterial3D, "pips": Label3D, "engineer": bool}
+var _units := {}  # id -> {"root": Node3D, "ring": HealthRing, "flash": StandardMaterial3D, "engineer": bool}
+var _max_hp := 2  # Refreshed from the mission on every sync.
 var _strikes: Node3D
 
 
@@ -25,6 +31,7 @@ func build(board: BoardView) -> void:
 
 ## Matches every unit and every strike marker to the mission as it is now.
 func sync(mission: BreakwaterMission) -> void:
+	_max_hp = mission.get_unit_max_hp()
 	for u in mission.get_units():
 		var id: int = u["id"]
 		if not _units.has(id):
@@ -34,15 +41,15 @@ func sync(mission: BreakwaterMission) -> void:
 		root.visible = u["alive"]
 		root.position = _board.top_of(Vector2i(u["x"], u["y"]))
 		root.scale = Vector3.ONE
-		var pips: Label3D = view["pips"]
-		pips.text = "●".repeat(u["hp"])
+		var ring: HealthRing = view["ring"]
+		ring.show_hp(u["hp"])
+		var flash: StandardMaterial3D = view["flash"]
+		flash.albedo_color = HURT if u["alive"] and int(u["hp"]) < _max_hp else CLEAR
 		if u["engineer"]:
 			# A spent engineer's ring dims.
-			var mat: StandardMaterial3D = view["mat"]
 			var base: Color = ENGINEER_COLORS[id % ENGINEER_COLORS.size()]
 			var done: bool = u["action"] == BreakwaterMission.ACTION_DONE
-			mat.albedo_color = base.darkened(0.6) if done else base
-			mat.emission_energy_multiplier = 0.0 if done else 0.4
+			ring.set_color(base.darkened(0.55) if done else base, 0.0 if done else 0.5)
 	_sync_strikes(mission)
 
 
@@ -70,10 +77,10 @@ func tween_bump(id: int, toward: Vector3) -> Tween:
 func tween_flash(id: int, hp: int) -> Tween:
 	var view: Dictionary = _units[id]
 	var flash: StandardMaterial3D = view["flash"]
-	var pips: Label3D = view["pips"]
-	pips.text = "●".repeat(hp)
+	var ring: HealthRing = view["ring"]
+	ring.show_hp(hp)
 	var tween := create_tween()
-	tween.tween_property(flash, "albedo_color:a", 0.0, 0.3).from(0.75)
+	tween.tween_property(flash, "albedo_color", HURT if hp > 0 and hp < _max_hp else CLEAR, 0.3).from(FLASH)
 	return tween
 
 
@@ -121,55 +128,25 @@ func _create(id: int, engineer: bool) -> void:
 		body = _placeholder(engineer)
 	root.add_child(body)
 
-	# Engineers are told apart by a coloured ring at their feet; a spent
-	# engineer's ring dims. The ring is also the placeholder's colour source.
-	var mat := StandardMaterial3D.new()
+	# Health lives on the ground: a ring of one arc per hit point. Engineers'
+	# rings are their team colour, which also tells the three apart;
+	# crawlers' are red.
+	var ring := HealthRing.new()
 	if engineer:
-		var ring := MeshInstance3D.new()
-		var torus := TorusMesh.new()
-		torus.inner_radius = 0.27
-		torus.outer_radius = 0.36
-		ring.mesh = torus
-		ring.scale = Vector3(1.0, 0.35, 1.0)
-		ring.position.y = 0.03
-		mat.albedo_color = ENGINEER_COLORS[id % ENGINEER_COLORS.size()]
-		mat.emission_enabled = true
-		mat.emission = mat.albedo_color
-		mat.emission_energy_multiplier = 0.4
-		ring.material_override = mat
-		root.add_child(ring)
-
+		ring.setup(_max_hp, 0.3, 0.42, ENGINEER_COLORS[id % ENGINEER_COLORS.size()])
 	else:
-		# Crawlers stand on a dark red disc: the enemy counterpart of the
-		# engineers' rings, and contrast for a teal crab on green grass.
-		var disc := MeshInstance3D.new()
-		var cylinder := CylinderMesh.new()
-		cylinder.top_radius = 0.42
-		cylinder.bottom_radius = 0.42
-		cylinder.height = 0.04
-		disc.mesh = cylinder
-		disc.position.y = 0.02
-		var disc_mat := StandardMaterial3D.new()
-		disc_mat.albedo_color = Color(0.45, 0.06, 0.05)
-		disc.material_override = disc_mat
-		root.add_child(disc)
+		ring.setup(_max_hp, 0.33, 0.46, CRAWLER_RING)
+	root.add_child(ring)
 
-	# Damage flashes through an overlay, which works on textured models too.
+	# Damage flashes, and a hurt unit stays darkened, through one overlay
+	# material, which works on textured models too.
 	var flash := StandardMaterial3D.new()
 	flash.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	flash.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	flash.albedo_color = Color(1, 0.15, 0.1, 0.0)
+	flash.albedo_color = CLEAR
 	_set_overlay(body, flash)
 
-	var pips := Label3D.new()
-	pips.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	pips.font_size = 64
-	pips.outline_size = 14
-	pips.modulate = Color(0.4, 1, 0.5) if engineer else Color(1, 0.5, 0.4)
-	pips.position.y = size.y + 0.2
-	root.add_child(pips)
-
-	_units[id] = {"root": root, "mat": mat, "flash": flash, "pips": pips, "engineer": engineer, "id": id}
+	_units[id] = {"root": root, "ring": ring, "flash": flash, "engineer": engineer, "id": id}
 
 
 func _placeholder(engineer: bool) -> Node3D:
@@ -259,11 +236,22 @@ func _arrow(a: Vector3, b: Vector3) -> Node3D:
 	return arrow
 
 
-func _marker(top: Vector3) -> MeshInstance3D:
-	var mark := MeshInstance3D.new()
-	var plane := PlaneMesh.new()
-	plane.size = Vector2(0.8, 0.8)
-	mark.mesh = plane
-	mark.material_override = _strike_material(Color(STRIKE_COLOR, 0.65))
-	mark.position = top + Vector3(0, 0.02, 0)
-	return mark
+## The struck tile: a hollow red frame at the tile's edge, drawn over
+## everything like the arrow, so the target inside (its health ring, its hurt
+## tint) still shows through.
+func _marker(top: Vector3) -> Node3D:
+	var frame := Node3D.new()
+	frame.position = top + Vector3(0, 0.04, 0)
+	var mat := _strike_material(STRIKE_COLOR)
+	var edge := 0.44
+	var width := 0.07
+	for side in [Vector3(0, 0, -edge), Vector3(0, 0, edge), Vector3(-edge, 0, 0), Vector3(edge, 0, 0)]:
+		var bar := MeshInstance3D.new()
+		var box := BoxMesh.new()
+		var along_x: bool = side.x == 0.0
+		box.size = Vector3(2.0 * edge + width, 0.02, width) if along_x else Vector3(width, 0.02, 2.0 * edge + width)
+		bar.mesh = box
+		bar.material_override = mat
+		bar.position = side
+		frame.add_child(bar)
+	return frame

@@ -10,6 +10,8 @@ namespace breakwater {
 
 inline constexpr int kBoardSize = 8;
 inline constexpr std::size_t kTileCount = static_cast<std::size_t>(kBoardSize) * kBoardSize;
+/// A building's HP when generated (docs/RULES.md, Island).
+inline constexpr std::uint8_t kBuildingHp = 2;
 
 /// Row 0 is the sea edge; y grows inland.
 struct Coord {
