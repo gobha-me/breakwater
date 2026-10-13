@@ -52,10 +52,9 @@ in #43.
 
 ## Licence and approval
 
-- **Licence:** generated with Meshy on the owner's paid plan. Use follows
-  Meshy's Terms of Service for paid plans, under which generated assets may
-  be used commercially. The owner should confirm this against their plan
-  before any release.
+- **Licence:** generated with Meshy on the owner's paid plan, whose terms
+  allow commercial use of generated assets. The owner confirmed the plan on
+  2026-10-13 and cleared the repository to go public with these assets.
 - **Owner approval:** the look (A) was chosen by Claude on the owner's
   instruction to "generate the assets and get them integrated" (#43). The
   owner's review of the integrated result is pending: see the PR captures.
