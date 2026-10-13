@@ -10,7 +10,10 @@
 #include <godot_cpp/variant/typed_array.hpp>
 #include <godot_cpp/variant/vector2i.hpp>
 
+#include <cstddef>
 #include <cstdint>
+#include <utility>
+#include <vector>
 
 namespace breakwater::gd {
 
@@ -78,6 +81,11 @@ public:
     godot::String move(int64_t engineer, int64_t x, int64_t y);
     godot::String shove(int64_t engineer, int64_t dir);
     godot::String end_turn();
+    /// Takes back the most recent move, restoring the exact prior state and
+    /// dropping it from the log. Moves stack until a shove or the end of the
+    /// turn, which are final. Returns "" or why nothing was undone.
+    godot::String undo();
+    [[nodiscard]] bool can_undo() const;
 
     [[nodiscard]] int64_t get_size() const;
     [[nodiscard]] int64_t get_seed() const;
@@ -119,6 +127,11 @@ private:
 
     Mission mission_ = Mission::generate(0);
     MissionLog log_;
+    /// The mission before each move since the last final command, with the
+    /// log length then. Restoring is exact: no rule runs backwards.
+    std::vector<std::pair<Mission, std::size_t>> undo_;
+    /// Why undo_ is empty, once a shove or an end turn has emptied it.
+    godot::String undo_blocked_ = "nothing to undo";
 };
 
 } // namespace breakwater::gd

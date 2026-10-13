@@ -68,8 +68,41 @@ func _run_mission_checks() -> void:
 			"offered seeds: proven ones in 0-999 only")
 	_check(BreakwaterMission.next_offered(77) == 79 and BreakwaterMission.next_offered(999) == 0,
 			"next offered seed skips rejected ones and wraps")
+	_run_undo_checks()
 	_check(fresh.load_log("breakwater-log 1\nseed 1\nfly 0\n") == "line 3: unknown command 'fly'",
 			"malformed log reported with its line")
+
+
+func _run_undo_checks() -> void:
+	var m := BreakwaterMission.new()
+	m.generate(20)
+	var start := m.get_state_hash()
+	var start_log := m.get_log()
+	_check(m.undo() == "nothing to undo" and not m.can_undo(), "undo with nothing to undo is refused")
+	var a: Vector2i = m.reachable(0)[0]
+	var b: Vector2i = m.reachable(1)[0]
+	m.move(0, a.x, a.y)
+	var after_one := m.get_state_hash()
+	m.move(1, b.x, b.y)
+	_check(m.can_undo(), "a move can be undone")
+	_check(m.undo() == "" and m.get_state_hash() == after_one, "undo restores the exact state before the last move")
+	_check(m.undo() == "" and m.get_state_hash() == start, "moves undo one by one back to the start")
+	_check(m.get_log() == start_log, "undone moves leave the log")
+	m.take_events()
+	# After a shove, nothing before it can be undone.
+	var shoved := false
+	for e in 3:
+		for d in 4:
+			if not shoved and m.preview_shove(e, d)["error"].is_empty():
+				m.move(e, m.reachable(e)[0].x, m.reachable(e)[0].y) if not m.reachable(e).is_empty() else null
+				shoved = m.shove(e, d) == ""
+	if shoved:
+		_check(m.undo() == "a shove cannot be undone", "a shove is final")
+	var ended := BreakwaterMission.new()
+	ended.generate(20)
+	ended.move(0, a.x, a.y)
+	ended.end_turn()
+	_check(ended.undo() == "the turn has ended", "ending the turn is final")
 
 
 func _check(condition: bool, label: String) -> void:

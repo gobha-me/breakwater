@@ -93,6 +93,17 @@ func restart(seed: int) -> void:
 			else "Seed %d is not proven survivable; mission %d instead." % [seed, offered])
 
 
+## Takes back the last move, if it can be taken back.
+func undo() -> void:
+	if playing:
+		return
+	var err := mission.undo()
+	_sync()
+	input.selected = -1
+	input.refresh()
+	hud.say("Move undone." if err.is_empty() else err[0].to_upper() + err.substr(1) + ".")
+
+
 ## The next mission the game offers.
 func next_mission() -> void:
 	restart(BreakwaterMission.next_offered(mission.get_seed()))

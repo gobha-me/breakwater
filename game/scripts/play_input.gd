@@ -11,6 +11,7 @@ extends Node3D
 ##                          selected engineer, even one hidden behind another
 ##   Space                  end the turn
 ##   Tab / Esc              next engineer / deselect
+##   Z                      undo the last move (until a shove or end of turn)
 ##   R / N                  restart this seed / next seed
 ##   F5                     save the game as a replayable log
 
@@ -191,6 +192,9 @@ func _unhandled_input(event: InputEvent) -> void:
 				cycle()
 			KEY_ESCAPE:
 				_select(-1)
+			KEY_Z:
+				if _accepting():
+					main.undo()
 			KEY_R:
 				main.restart(main.mission.get_seed())
 			KEY_N:
