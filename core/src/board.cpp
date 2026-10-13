@@ -11,7 +11,6 @@ namespace breakwater {
 namespace {
 
 constexpr int kBuildingCount = 3;
-constexpr std::uint8_t kBuildingHp = 2;
 constexpr int kTownFirstRow = 5;
 
 [[nodiscard]] std::size_t index_of(Coord c) {

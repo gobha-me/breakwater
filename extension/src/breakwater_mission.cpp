@@ -158,6 +158,10 @@ godot::String BreakwaterMission::end_turn() { return apply(EndTurnCommand{}); }
 int64_t BreakwaterMission::get_size() const { return kBoardSize; }
 
 int64_t BreakwaterMission::get_turn_count() const { return kTurnCount; }
+
+int64_t BreakwaterMission::get_unit_max_hp() const { return kUnitHp; }
+
+int64_t BreakwaterMission::get_building_max_hp() const { return kBuildingHp; }
 // NOLINTEND(readability-convert-member-functions-to-static)
 
 int64_t BreakwaterMission::get_seed() const { return std::bit_cast<int64_t>(mission_.seed()); }
@@ -256,6 +260,8 @@ void BreakwaterMission::_bind_methods() {
     ClassDB::bind_method(D_METHOD("get_seed"), &BreakwaterMission::get_seed);
     ClassDB::bind_method(D_METHOD("get_turn"), &BreakwaterMission::get_turn);
     ClassDB::bind_method(D_METHOD("get_turn_count"), &BreakwaterMission::get_turn_count);
+    ClassDB::bind_method(D_METHOD("get_unit_max_hp"), &BreakwaterMission::get_unit_max_hp);
+    ClassDB::bind_method(D_METHOD("get_building_max_hp"), &BreakwaterMission::get_building_max_hp);
     ClassDB::bind_method(D_METHOD("get_tide"), &BreakwaterMission::get_tide);
     ClassDB::bind_method(D_METHOD("get_outcome"), &BreakwaterMission::get_outcome);
     ClassDB::bind_method(D_METHOD("get_elevation", "x", "y"), &BreakwaterMission::get_elevation);
