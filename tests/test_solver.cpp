@@ -1,4 +1,5 @@
 #include "breakwater/mission.hpp"
+#include "breakwater/seeds.hpp"
 #include "breakwater/solver.hpp"
 
 #include <catch2/catch_test_macros.hpp>
@@ -60,6 +61,9 @@ Mission last_stand() {
 
 TEST_CASE("every witness the solver returns wins on replay", "[solver]") {
     for (std::uint64_t seed = 0; seed < 50; ++seed) {
+        if (!breakwater::is_offered(seed)) {
+            continue; // Rejected: the solver could not prove it (seeds.hpp).
+        }
         CAPTURE(seed);
         const Mission mission = Mission::generate(seed);
         const auto result = breakwater::solve(mission);

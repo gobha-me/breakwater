@@ -41,10 +41,10 @@ func _run() -> void:
 	await _check_strike_hover()
 	await _check_enemy_phase()
 	await _check_hints()
-	_main.restart(78)
-	_check(_main.mission.get_seed() == 79, "a rejected seed is never played: 78 starts mission 79")
+	_main.restart(172)
+	_check(_main.mission.get_seed() == 173, "a rejected seed is never played: 172 starts mission 173")
 	await _key(KEY_N)
-	_check(_main.mission.get_seed() == 80, "N moves to the next offered seed")
+	_check(_main.mission.get_seed() == 174, "N moves to the next offered seed")
 	for s in str(args.get("seeds", "20")).split(","):
 		await _play_by_clicks(int(s))
 	for path in str(args.get("play-logs", "")).split(",", false):
@@ -133,16 +133,23 @@ func _check_undo() -> void:
 
 
 ## Hovering a crawler highlights its own strike; moving off clears it.
+## Crawlers telegraph only a strike in reach, so the seed is the first offered
+## one from 20 whose opening has one.
 func _check_strike_hover() -> void:
-	_main.restart(20)
-	await _frames(2)
+	var pick := 20
 	var crawler := -1
 	var at := Vector2i(-1, -1)
-	for u in _main.mission.get_units():
-		if not u["engineer"] and int(u["intent"]) >= 0:
-			crawler = int(u["id"])
-			at = Vector2i(u["x"], u["y"])
-	_check(crawler >= 0, "seed 20 opens with a telegraphing crawler")
+	for _attempt in 50:
+		_main.restart(pick)
+		await _frames(2)
+		for u in _main.mission.get_units():
+			if not u["engineer"] and int(u["intent"]) >= 0:
+				crawler = int(u["id"])
+				at = Vector2i(u["x"], u["y"])
+		if crawler >= 0:
+			break
+		pick = BreakwaterMission.next_offered(pick)
+	_check(crawler >= 0, "seed %d opens with a telegraphing crawler" % pick)
 	await _move_mouse(at)
 	_check(_main.units.highlighted_strike() == crawler, "hovering a crawler highlights its strike")
 	await _move_mouse(Vector2i(7, 7))

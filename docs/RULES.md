@@ -125,21 +125,26 @@ empty water, away from the town.
 
 ## Crawler intent
 
-A crawler picks the best of the plans it can reach this turn. A plan is a
-destination within 2 steps (staying put counts) together with an attack
-direction from that destination. Plans are ranked by this key, lowest first,
-and the first plan wins:
+A crawler goes for the town. A plan is a destination within 3 steps (staying
+put counts) together with a direction from that destination that strikes a
+**standing building**. Plans are ranked by this key, lowest first, and the
+first plan wins:
 
-1. Target class: a building is 0, an engineer is 1. A plan aimed at anything
-   else is not a plan. The town is what the crawlers came for; an engineer is
-   only a target when no building is in reach.
-2. Steps taken.
-3. Destination `y`, then `x`.
-4. Direction, in the order North, East, South, West.
+1. Steps taken.
+2. Destination `y`, then `x`.
+3. Direction, in the order North, East, South, West.
 
-If no plan exists, the crawler moves to the reachable tile closest to the
-nearest standing building by Manhattan distance. Ties break by fewest steps,
-then destination `y`, then `x`. It then declares **no attack**.
+If no building is in reach, the crawler **marches on the town**: it moves to
+the reachable tile closest to the nearest standing building by Manhattan
+distance. Ties break by fewest steps, then destination `y`, then `x`. With no
+building standing, it holds position. Wherever it stops, it strikes an engineer
+standing next to it, if any, choosing the first in the order North, East,
+South, West. Otherwise it declares **no attack**.
+
+Engineers cannot lure crawlers. Under the earlier rule, a crawler with no
+building in reach chased any engineer it could reach. Passive play exploited
+that: an engineer would dangle out of reach of the town, step out of each
+telegraphed strike, and drag every crawler away from the last cottage (#71).
 
 The key is a total order, so no outcome can depend on iteration order or on a
 random draw. The crawler AI uses no randomness at all, which keeps it readable
@@ -155,16 +160,26 @@ The numbers above are tuned with the solver (`bw_solve`), not by feel. The
 question is whether the game's one verb is necessary: a mission a player can
 win by walking inland, without ever shoving, fails pillar 2.
 
-| Rules | Solver, with shoves | Retreat policy, no shoves | Idle |
-|---|---|---|---|
-| Bootstrap: crawlers prefer engineers, strike 1, reach 2 | 1000 / 1000 winnable | **841** / 1000 won | 0 |
-| Now: crawlers prefer buildings, strike 2, reach 3 | 993 / 1000 proven winnable, 7 unproven | **10** / 1000 won | 0 |
+| Rules | Solver, with shoves (1M nodes) | Solver, **no** shoves (1M nodes) | Retreat policy, no shoves | Idle |
+|---|---|---|---|---|
+| Bootstrap: crawlers prefer engineers, strike 1, reach 2 | 1000 / 1000 winnable | 1000 / 1000 winnable | **841** / 1000 won | 0 |
+| #39: crawlers prefer buildings, strike 2, reach 3 | 993 winnable, 7 unproven | ≥ 464 winnable, 536 unproven | 10 / 1000 won | 0 |
+| #71: crawlers march on the town, no luring | **981** winnable, 19 unproven | **≥ 175** winnable, 1 unwinnable, 824 unproven | 10 / 1000 won | 0 |
+
+How to read the shove-free column: a "winnable" verdict always comes with a
+witness, so 175 is a **certified lower bound** on missions a player could win
+without ever shoving. An "unproven" verdict says nothing either way. Proving
+shove-free *losses* for most seeds would need an exhaustive search of every
+joint placement of three engineers over five turns, which is out of reach at
+this budget. Shortcuts that ignore engineers are unsound, because engineers
+block crawler paths and attack tiles.
 
 Under the bootstrap rules the solver could win all 1000 seeds without a single
-shove. Engineers drew every strike and simply stepped out of the telegraphed
-tiles. Now strikes go for the town, which cannot step aside, and land hard
-enough to raze it. A shove that turns a crawler is the main way to save a
-building.
+shove. Under #39, strikes went for the town and walking inland stopped
+working. But engineers could still bait crawlers away from the last cottage
+and dodge every strike, so at least 46% of seeds stayed winnable without a
+shove. Marching crawlers end the baiting; a shove that turns or pushes a
+crawler back is now the main way to save a building.
 
 Seeds the solver cannot prove are rejected at generation, so every mission
 offered is winnable.
