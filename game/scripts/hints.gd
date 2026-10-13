@@ -12,7 +12,7 @@ const HINTS := [
 	["select", "Click one of your engineers to select it."],
 	["act", "Green tiles: where it can move.\nOrange: units it can shove away. Hover one to see exactly what the shove will do."],
 	["strikes", "Red arrows are next turn's crawler strikes. A strike razes a cottage or fells an engineer.\nShove a crawler and its strike turns with it."],
-	["tide", "The blue film marks tiles the next tide will flood. Engineers drown in water.\nPress Space to end your turn."],
+	["tide", "Blue hatching marks tiles the next tide will flood. Engineers drown in water.\nPress Space to end your turn."],
 	["goal", "Hold the town for 5 turns: keep at least one cottage and one engineer standing."],
 ]
 
