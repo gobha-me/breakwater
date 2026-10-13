@@ -15,12 +15,24 @@ Rules are pure C++23 (`core/`), exposed to Godot 4.7 through a GDExtension
 
 The first configure fetches Catch2 v3.16.0 and godot-cpp 10.0.0-stable.
 
-## Build and run
+## Play
+
+```sh
+tools/play.sh            # build what's missing and play (default mission 20)
+tools/play.sh 42         # a specific mission; unproven seeds move on to the next
+tools/export.sh          # standalone Linux release build in build/export/
+tools/play.sh --exported # play the exported build
+```
+
+Mouse: click an engineer, then a green tile to move or an orange unit to shove
+(hover it first to preview the outcome). Keys: WASD shove, Space end turn,
+Z undo a move, Tab next engineer, R restart, N next mission, F5 save a replay.
+
+## Build
 
 ```sh
 cmake --preset dev && cmake --build --preset dev   # core, tests, extension
 ctest --preset dev
-godot --path game
 ```
 
 ## Replays
