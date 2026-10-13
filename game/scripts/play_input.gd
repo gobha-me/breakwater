@@ -9,7 +9,7 @@ extends Node3D
 ##   Click an orange unit   shove it away (Shift-click to shove an engineer)
 ##   WASD / arrows          shove the unit north / west / south / east of the
 ##                          selected engineer, even one hidden behind another
-##   Space                  end the turn
+##   Space                  end the turn; during playback, skip to its end
 ##   Tab / Esc              next engineer / deselect
 ##   Z                      undo the last move (until a shove or end of turn)
 ##   R / N                  restart this seed / next seed
@@ -197,7 +197,10 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event is InputEventKey and event.pressed and not event.echo:
 		match event.keycode:
 			KEY_SPACE:
-				end_turn()
+				if main.playing:
+					main.skip()
+				else:
+					end_turn()
 			KEY_W, KEY_UP:
 				shove_toward(BreakwaterMission.DIR_NORTH)
 			KEY_D, KEY_RIGHT:
