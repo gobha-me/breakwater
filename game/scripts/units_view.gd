@@ -36,9 +36,13 @@ func sync(mission: BreakwaterMission) -> void:
 		root.scale = Vector3.ONE
 		var pips: Label3D = view["pips"]
 		pips.text = "●".repeat(u["hp"])
-		# An engineer that has spent its turn fades a little.
-		var mat: StandardMaterial3D = view["mat"]
-		mat.albedo_color.a = 0.55 if u["engineer"] and u["action"] == BreakwaterMission.ACTION_DONE else 1.0
+		if u["engineer"]:
+			# A spent engineer's ring dims.
+			var mat: StandardMaterial3D = view["mat"]
+			var base: Color = ENGINEER_COLORS[id % ENGINEER_COLORS.size()]
+			var done: bool = u["action"] == BreakwaterMission.ACTION_DONE
+			mat.albedo_color = base.darkened(0.6) if done else base
+			mat.emission_energy_multiplier = 0.0 if done else 0.4
 	_sync_strikes(mission)
 
 
@@ -65,13 +69,11 @@ func tween_bump(id: int, toward: Vector3) -> Tween:
 
 func tween_flash(id: int, hp: int) -> Tween:
 	var view: Dictionary = _units[id]
-	var mat: StandardMaterial3D = view["mat"]
-	mat.emission_enabled = true
-	mat.emission = Color(1, 0.15, 0.1)
+	var flash: StandardMaterial3D = view["flash"]
 	var pips: Label3D = view["pips"]
 	pips.text = "●".repeat(hp)
 	var tween := create_tween()
-	tween.tween_property(mat, "emission_energy_multiplier", 0.0, 0.3).from(2.5)
+	tween.tween_property(flash, "albedo_color:a", 0.0, 0.3).from(0.75)
 	return tween
 
 
@@ -100,21 +102,86 @@ func tween_spawn(id: int, engineer: bool, at: Vector3) -> Tween:
 	return tween
 
 
+const ENGINEER_MODEL := "res://assets/models/engineer.glb"
+const CRAWLER_MODEL := "res://assets/models/crawler.glb"
+## Sizes the bodies are fitted to, in tiles. play_input.gd's pick boxes use
+## the same heights.
+const ENGINEER_SIZE := Vector2(0.7, 1.0)  # Footprint, height.
+const CRAWLER_SIZE := Vector2(0.95, 0.5)
+
+
 func _create(id: int, engineer: bool) -> void:
 	var root := Node3D.new()
 	root.name = ("Engineer%d" if engineer else "Crawler%d") % id
 	add_child(root)
 
+	var size := ENGINEER_SIZE if engineer else CRAWLER_SIZE
+	var body := ModelFit.instance(ENGINEER_MODEL if engineer else CRAWLER_MODEL, size.x, size.y)
+	if body == null:
+		body = _placeholder(engineer)
+	root.add_child(body)
+
+	# Engineers are told apart by a coloured ring at their feet; a spent
+	# engineer's ring dims. The ring is also the placeholder's colour source.
+	var mat := StandardMaterial3D.new()
+	if engineer:
+		var ring := MeshInstance3D.new()
+		var torus := TorusMesh.new()
+		torus.inner_radius = 0.27
+		torus.outer_radius = 0.36
+		ring.mesh = torus
+		ring.scale = Vector3(1.0, 0.35, 1.0)
+		ring.position.y = 0.03
+		mat.albedo_color = ENGINEER_COLORS[id % ENGINEER_COLORS.size()]
+		mat.emission_enabled = true
+		mat.emission = mat.albedo_color
+		mat.emission_energy_multiplier = 0.4
+		ring.material_override = mat
+		root.add_child(ring)
+
+	else:
+		# Crawlers stand on a dark red disc: the enemy counterpart of the
+		# engineers' rings, and contrast for a teal crab on green grass.
+		var disc := MeshInstance3D.new()
+		var cylinder := CylinderMesh.new()
+		cylinder.top_radius = 0.42
+		cylinder.bottom_radius = 0.42
+		cylinder.height = 0.04
+		disc.mesh = cylinder
+		disc.position.y = 0.02
+		var disc_mat := StandardMaterial3D.new()
+		disc_mat.albedo_color = Color(0.45, 0.06, 0.05)
+		disc.material_override = disc_mat
+		root.add_child(disc)
+
+	# Damage flashes through an overlay, which works on textured models too.
+	var flash := StandardMaterial3D.new()
+	flash.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	flash.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	flash.albedo_color = Color(1, 0.15, 0.1, 0.0)
+	_set_overlay(body, flash)
+
+	var pips := Label3D.new()
+	pips.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	pips.font_size = 64
+	pips.outline_size = 14
+	pips.modulate = Color(0.4, 1, 0.5) if engineer else Color(1, 0.5, 0.4)
+	pips.position.y = size.y + 0.2
+	root.add_child(pips)
+
+	_units[id] = {"root": root, "mat": mat, "flash": flash, "pips": pips, "engineer": engineer, "id": id}
+
+
+func _placeholder(engineer: bool) -> Node3D:
 	var body := MeshInstance3D.new()
 	var mat := StandardMaterial3D.new()
-	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	if engineer:
 		var capsule := CapsuleMesh.new()
 		capsule.radius = 0.22
 		capsule.height = 0.8
 		body.mesh = capsule
 		body.position.y = 0.4
-		mat.albedo_color = ENGINEER_COLORS[id % ENGINEER_COLORS.size()]
+		mat.albedo_color = Color(0.85, 0.85, 0.85)
 	else:
 		var sphere := SphereMesh.new()
 		sphere.radius = 0.32
@@ -123,17 +190,16 @@ func _create(id: int, engineer: bool) -> void:
 		body.position.y = 0.18
 		mat.albedo_color = CRAWLER_COLOR
 	body.material_override = mat
-	root.add_child(body)
+	var holder := Node3D.new()
+	holder.add_child(body)
+	return holder
 
-	var pips := Label3D.new()
-	pips.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	pips.font_size = 64
-	pips.outline_size = 14
-	pips.modulate = Color(0.4, 1, 0.5) if engineer else Color(1, 0.5, 0.4)
-	pips.position.y = 1.05 if engineer else 0.6
-	root.add_child(pips)
 
-	_units[id] = {"root": root, "mat": mat, "pips": pips, "engineer": engineer}
+static func _set_overlay(node: Node, overlay: Material) -> void:
+	if node is GeometryInstance3D:
+		node.material_overlay = overlay
+	for child in node.get_children():
+		_set_overlay(child, overlay)
 
 
 ## One red arrow and one red tile marker per telegraphed strike.
