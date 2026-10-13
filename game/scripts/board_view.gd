@@ -10,6 +10,11 @@ const SAND := [Color(0.85, 0.78, 0.55), Color(0.82, 0.76, 0.54), Color(0.75, 0.7
 		Color(0.6, 0.66, 0.42), Color(0.45, 0.62, 0.35), Color(0.4, 0.58, 0.32),
 		Color(0.38, 0.55, 0.3), Color(0.45, 0.5, 0.4), Color(0.5, 0.5, 0.45)]
 const FLOODED := Color(0.25, 0.42, 0.55)
+const FLOODED_TINT := Color(0.45, 0.62, 0.8)
+## Per band (sand, grass, stony ground), multiplied into the texture.
+const BAND_TINT := [Color(1.0, 1.0, 1.0), Color(0.72, 0.8, 0.66), Color(0.95, 0.95, 0.95)]
+const TERRAIN_SHADER := preload("res://shaders/terrain.gdshader")
+const CLIFF_TEXTURE := "res://assets/textures/terrain_cliff.jpg"
 const NEXT_FLOOD := Color(0.3, 0.6, 0.95, 0.55)
 const HOUSE := Color(0.78, 0.42, 0.32)
 const BUILDING_RING := Color(1.0, 0.82, 0.35)
@@ -21,7 +26,7 @@ const RUBBLE := Color(0.22, 0.16, 0.12)  # Dark, so a razed house reads against 
 
 var _mission: BreakwaterMission
 var _size := 0
-var _tile_mats: Array[StandardMaterial3D] = []
+var _tile_mats: Array[Material] = []
 var _next_marks: Array[MeshInstance3D] = []
 var _houses := {}  # Vector2i -> {"body", "rubble", "flash", "label", "ring"}
 var _water: MeshInstance3D
@@ -64,7 +69,7 @@ func sync() -> void:
 		for x in _size:
 			var i := y * _size + x
 			var flooded := _mission.is_flooded(x, y)
-			_tile_mats[i].albedo_color = FLOODED if flooded else SAND[clampi(_mission.get_elevation(x, y), 0, SAND.size() - 1)]
+			_tint_tile(_tile_mats[i], _mission.get_elevation(x, y), flooded)
 			_next_marks[i].visible = (not flooded and _mission.floods_next(x, y)
 					and _mission.get_outcome() == BreakwaterMission.OUTCOME_IN_PROGRESS)
 	for c in _houses:
@@ -90,9 +95,11 @@ func flash_building(c: Vector2i, hp: int) -> Tween:
 
 
 func _build_tile(c: Vector2i) -> void:
-	var height := tile_top(_mission.get_elevation(c.x, c.y))
+	var elevation := _mission.get_elevation(c.x, c.y)
+	var height := tile_top(elevation)
 	var tile := _box(Vector3(TILE * 0.95, height, TILE * 0.95))
 	tile.position = Vector3(c.x * TILE, height * 0.5, c.y * TILE)
+	tile.material_override = _terrain_material(elevation)
 	_tile_mats.append(tile.material_override)
 	add_child(tile)
 
@@ -157,6 +164,35 @@ func _show_house(c: Vector2i, hp: int) -> void:
 	flash.albedo_color = DAMAGED if hp > 0 and hp < _mission.get_building_max_hp() else Color(1, 0.2, 0.1, 0.0)
 	label.text = "" if hp > 0 else "✕"
 	label.modulate = Color(1, 0.4, 0.3)
+
+
+## A tile's material: the band's ground texture on top (sand low, grass in
+## the middle, stony ground high), the cliff texture on the sides, falling back
+## to the flat palette if the textures are missing.
+func _terrain_material(elevation: int) -> Material:
+	var band := "sand" if elevation <= 2 else ("grass" if elevation <= 6 else "rock")
+	var top_path := "res://assets/textures/terrain_%s.jpg" % band
+	if not ResourceLoader.exists(top_path) or not ResourceLoader.exists(CLIFF_TEXTURE):
+		return StandardMaterial3D.new()
+	var mat := ShaderMaterial.new()
+	mat.shader = TERRAIN_SHADER
+	mat.set_shader_parameter("top_texture", load(top_path))
+	mat.set_shader_parameter("side_texture", load(CLIFF_TEXTURE))
+	return mat
+
+
+## Elevation reads as brightness (higher is lighter); flooded tiles turn to a
+## wet blue-grey.
+func _tint_tile(mat: Material, elevation: int, flooded: bool) -> void:
+	if mat is ShaderMaterial:
+		# Grass is the busiest texture and sits under most of the action: calm
+		# it so units and highlights stay the brightest things on the board.
+		var band: Color = BAND_TINT[0 if elevation <= 2 else (1 if elevation <= 6 else 2)]
+		var light := 0.7 + 0.05 * elevation
+		mat.set_shader_parameter("tint", FLOODED_TINT if flooded else band * Color(light, light, light))
+		mat.set_shader_parameter("wet", 1.0 if flooded else 0.0)
+	else:
+		(mat as StandardMaterial3D).albedo_color = FLOODED if flooded else SAND[clampi(elevation, 0, SAND.size() - 1)]
 
 
 func _build_water() -> void:
