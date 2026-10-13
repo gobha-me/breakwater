@@ -94,3 +94,22 @@ rises with elevation.
 
 **Licence:** generated on the owner's paid plans; shipped under the
 repository's BSD 3-Clause licence.
+
+## Terrain toppers (2026-10-13, #69)
+
+Three small decorative props, made like the slice assets: a `nano-banana-pro`
+reference image with the look-A style lead, then image-to-3d with the cheaper
+smart-topology model (`meshy-t2`, textured, GLB), at 9 + 15 credits each.
+
+| Prop | Band | Shipping file | Prompt after the style lead | Text-to-image task | Image-to-3d task |
+|---|---|---|---|---|---|
+| Grass tuft | grass | `game/assets/models/tuft.glb` | A small clump of tall green grass blades with two tiny yellow wildflowers, short and round, wider than tall. | `01a13651-0a7c-7181-b6fc-ba70815d4c15` | `01a13651-daed-72aa-a7d1-5849aa80ffe8` |
+| Stones | stony ground | `game/assets/models/stones.glb` | A low cluster of three small rounded grey-brown stones with a patch of green moss, wider than tall. | `01a13651-0ae3-718f-b4f2-5d1ef2c553a7` | `01a13651-de71-7523-b089-afc75b51cd25` |
+| Driftwood and shells | sand | `game/assets/models/driftwood.glb` | A short piece of pale bleached driftwood lying flat with two pink-and-cream seashells beside it, low and flat. | `01a13651-0b3f-77a1-8308-c2f19532f741` | `01a13651-e114-72a7-947b-a5af145f00f2` |
+
+**Edits:** none to the files. In the game each prop is fitted to 0.42 × 0.26
+tiles. It is placed on about 40% of tiles by a presentation-only hash of the
+tile and the seed, never on a cottage's tile. It hides while anything stands on
+its tile, and once the tile floods.
+
+**Cost:** 3 × 24 = 72 credits. **Licence:** as above.

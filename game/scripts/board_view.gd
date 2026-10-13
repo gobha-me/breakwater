@@ -16,6 +16,10 @@ const BAND_TINT := [Color(1.0, 1.0, 1.0), Color(0.72, 0.8, 0.66), Color(0.95, 0.
 const TERRAIN_SHADER := preload("res://shaders/terrain.gdshader")
 const WATER_SHADER := preload("res://shaders/water.gdshader")
 const NEXT_FLOOD_SHADER := preload("res://shaders/next_flood.gdshader")
+## Decorative props per band (sand, grass, stony ground).
+const TOPPERS := ["res://assets/models/driftwood.glb", "res://assets/models/tuft.glb", "res://assets/models/stones.glb"]
+## Share of eligible tiles that get a topper.
+const TOPPER_DENSITY := 0.4
 const CLIFF_TEXTURE := "res://assets/textures/terrain_cliff.jpg"
 const HOUSE := Color(0.78, 0.42, 0.32)
 const BUILDING_RING := Color(1.0, 0.82, 0.35)
@@ -29,6 +33,7 @@ var _mission: BreakwaterMission
 var _size := 0
 var _tile_mats: Array[Material] = []
 var _next_marks: Array[MeshInstance3D] = []
+var _toppers := {}  # Vector2i -> Node3D, decoration only
 var _houses := {}  # Vector2i -> {"body", "rubble", "flash", "label", "ring"}
 var _water: MeshInstance3D
 var _water_mat: ShaderMaterial
@@ -58,11 +63,13 @@ func build(mission: BreakwaterMission) -> void:
 	_tile_mats.clear()
 	_next_marks.clear()
 	_houses.clear()
+	_toppers.clear()
 	for y in _size:
 		for x in _size:
 			_build_tile(Vector2i(x, y))
 	_build_water()
 	_build_breakwater()
+	_build_toppers()
 	sync()
 
 
@@ -92,6 +99,14 @@ func sync() -> void:
 					and _mission.get_outcome() == BreakwaterMission.OUTCOME_IN_PROGRESS)
 	for c in _houses:
 		_show_house(c, _mission.get_building_hp(c.x, c.y))
+	# A prop gives way to anything standing on its tile, so it can never hide
+	# a unit or its health ring, and it goes under with the tide.
+	var occupied := {}
+	for u in _mission.get_units():
+		if u["alive"]:
+			occupied[Vector2i(u["x"], u["y"])] = true
+	for c in _toppers:
+		(_toppers[c] as Node3D).visible = not _mission.is_flooded(c.x, c.y) and not occupied.has(c)
 	_water.position.y = _water_height(_mission.get_tide())
 
 
@@ -230,6 +245,39 @@ func _build_water() -> void:
 ## first dry level: flooded tiles are covered, dry ones stand clear.
 func _water_height(tide: int) -> float:
 	return BASE_HEIGHT + (tide - 0.5) * STEP_HEIGHT
+
+
+## Decoration only: small props scattered by a presentation-only hash of the
+## tile and the seed, never the game's RNG streams. At most one per tile, never
+## on a cottage's tile; sync() hides a prop while anything stands on its tile
+## and once the tile floods. Neither the rules nor input read them.
+func _build_toppers() -> void:
+	for y in _size:
+		for x in _size:
+			var c := Vector2i(x, y)
+			if _mission.get_building_hp(x, y) > 0:
+				continue
+			var h := _hash(c)
+			if float(h % 1000) / 1000.0 >= TOPPER_DENSITY:
+				continue
+			var elevation := _mission.get_elevation(x, y)
+			var band := 0 if elevation <= 2 else (1 if elevation <= 6 else 2)
+			var prop := ModelFit.instance(TOPPERS[band], 0.42, 0.26)
+			if prop == null:
+				continue
+			var corner := Vector3(0.22 if (h >> 10) & 1 else -0.22, 0.0, 0.22 if (h >> 11) & 1 else -0.22)
+			prop.position = top_of(c) + corner
+			prop.rotation.y = float((h >> 12) % 360) * PI / 180.0
+			add_child(prop)
+			_toppers[c] = prop
+
+
+## A stable per-tile hash from the tile and the seed (FNV-1a over both).
+func _hash(c: Vector2i) -> int:
+	var h := 2166136261
+	for v in [c.x, c.y, _mission.get_seed() & 0xFFFFFFFF]:
+		h = ((h ^ (v & 0xFFFFFFFF)) * 16777619) & 0xFFFFFFFF
+	return h
 
 
 ## Decoration only: the old breakwater out at sea, beyond row 0. It stands
