@@ -60,3 +60,37 @@ in #43.
   instruction (#43). The owner reviewed the integrated captures on 2026-10-13
   ("the assets look okay") and asked for the health display to be cleaned up,
   which #54 did.
+
+## Terrain textures (2026-10-13, #67, #68)
+
+Four seamless textures applied by `game/shaders/terrain.gdshader`: the band's
+ground texture on tile tops (sand at elevation 0-2, grass 3-6, stony ground
+7-8) and the cliff texture on the sides, all in world space.
+
+Two generators were compared on the same prompts, as the owner suggested:
+Meshy `nano-banana-pro` and `venice image` with `flux-2-pro`. Meshy's set
+shipped: it is chunkier and painterly, matching look A, while Venice's is finer
+and closer to photographic, and came back at 4:3. The comparison and Venice's
+four are kept in `assets/source/terrain/`.
+
+Every prompt began: "Seamless tileable texture, top-down flat orthographic view
+(for the cliff: flat front view of a vertical cliff face), stylized toy diorama
+like a painted board-game miniature:" and ended: "Even flat lighting, no
+shadows, no border, fills the whole frame."
+
+| Texture | Shipping file | Prompt middle | Meshy text-to-image task |
+|---|---|---|---|
+| Sand | `game/assets/textures/terrain_sand.jpg` | pale warm beach sand with gentle wind ripples and a few tiny shell flecks | `01a1363a-e5ab-7552-85bd-2398f16fe51d` |
+| Grass | `game/assets/textures/terrain_grass.jpg` | short bright green grass with chunky painted strokes and a few tiny clover leaves | `01a1363a-e61f-74b5-94f0-29e17753ad0c` |
+| Stony ground | `game/assets/textures/terrain_rock.jpg` | grey-brown stony upland ground, small flat stones packed together with thin moss in the cracks | `01a1363a-e684-71db-829f-8533030f411b` |
+| Cliff face | `game/assets/textures/terrain_cliff.jpg` | horizontal layered rock strata in warm greys and sandy browns | `01a1363a-e6e3-7694-943f-6e816fc6399a` |
+
+**Edits:** re-encoded from PNG to JPEG at quality 90, 1024². In the game the
+grass band is tinted darker and less saturated (0.72, 0.8, 0.66), so units and
+highlights stay the brightest things on the board, and every tile's brightness
+rises with elevation.
+
+**Cost:** 4 × 9 = 36 Meshy credits, plus 4 Venice images at $0.03.
+
+**Licence:** generated on the owner's paid plans; shipped under the
+repository's BSD 3-Clause licence.
