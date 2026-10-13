@@ -110,7 +110,7 @@ jobs:
         run: tools/seeds_check.sh
 
   clang:
-    name: clang, extension and clang-tidy
+    name: clang, extension, clang-tidy and Godot
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     env:
@@ -163,3 +163,15 @@ jobs:
         env:
           RUN_CLANG_TIDY: run-clang-tidy-20
         run: tools/lint.sh
+
+      - name: Restore the official Godot binary
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/breakwater
+          key: godot-4.7.2-official-${{ hashFiles('tools/fetch_godot.sh') }}
+
+      # The bridge smoke test, autoplay of every committed log through the
+      # scene, and the injected-input test, headless on the official 4.7.2
+      # build. The golden image stays local: it needs a GPU-backed display.
+      - name: Godot gates (official 4.7.2, headless)
+        run: GODOT_BIN="$(tools/fetch_godot.sh)" tools/godot_smoke.sh
