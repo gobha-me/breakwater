@@ -54,7 +54,8 @@ in #43.
 
 - **Licence:** generated with Meshy on the owner's paid plan, whose terms
   allow commercial use of generated assets. The owner confirmed the plan on
-  2026-10-13 and cleared the repository to go public with these assets.
+  2026-10-13 and cleared the repository to go public with these assets. They
+  are distributed under the repository's BSD 3-Clause licence (`LICENSE`).
 - **Owner approval:** the look (A) was chosen by Claude on the owner's
   instruction to "generate the assets and get them integrated" (#43). The
   owner's review of the integrated result is pending: see the PR captures.
