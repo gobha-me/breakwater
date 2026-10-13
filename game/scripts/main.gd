@@ -12,6 +12,9 @@ extends Node3D
 ##                       print the outcome and hash, and quit
 ##   --speed=<x>         playback speed multiplier (autoplay defaults to 8)
 ##   --save-dir=<path>   where F5 saves logs (default user://logs)
+##   --select=<id> --hover=<x>,<y>
+##                       select an engineer and hover a tile, as a player
+##                       would, for captures of selection and shove previews
 
 signal playback_finished
 
@@ -50,6 +53,11 @@ func _ready() -> void:
 		_load_until(args["log"], int(args.get("after-turn", "-1")))
 	else:
 		restart(int(args.get("seed", str(mission_seed))))
+	if args.has("select"):
+		input.click.call_deferred(_engineer_tile(int(args["select"])))
+	if args.has("hover"):
+		var xy: PackedStringArray = str(args["hover"]).split(",")
+		input.hover.call_deferred(Vector2i(int(xy[0]), int(xy[1])))
 	if args.has("autoplay"):
 		# Real-time watchdog: a script error mid-autoplay must fail the run,
 		# not leave a headless process waiting forever.
@@ -65,6 +73,11 @@ func _rebuild() -> void:
 	_sync()
 	input.selected = -1
 	input.refresh()
+
+
+func _engineer_tile(id: int) -> Vector2i:
+	var u: Dictionary = mission.get_units()[id]
+	return Vector2i(u["x"], u["y"])
 
 
 ## A fresh mission from `seed`, discarding the current one. Only offered

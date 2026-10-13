@@ -312,3 +312,27 @@ TEST_CASE("mission hash covers seed, turn and action states, not events", "[miss
         CHECK(mission.state_hash() == before);
     }
 }
+
+TEST_CASE("a preview is the outcome, and leaves the mission untouched", "[mission][preview]") {
+    Board board = flat_board();
+    const auto e = board.add_unit(UnitKind::Engineer, {3, 2}, 2);
+    const auto c = board.add_unit(UnitKind::Crawler, {3, 1}, 2);
+    (void)board.add_unit(UnitKind::Crawler, {3, 0}, 2);
+    Mission mission = scenario(board);
+    const auto before = mission.state_hash();
+
+    const auto preview = mission.preview(ShoveCommand{.engineer = e, .dir = Direction::North});
+    REQUIRE(preview);
+    CHECK(mission.state_hash() == before);
+    CHECK(mission.take_events().empty());
+    CHECK(preview->board().unit(c).hp == 1);
+
+    REQUIRE(mission.apply(ShoveCommand{.engineer = e, .dir = Direction::North}));
+    CHECK(mission.state_hash() == preview->state_hash());
+    auto shown = *preview;
+    CHECK(mission.take_events() == shown.take_events());
+
+    const auto refused = mission.preview(ShoveCommand{.engineer = e, .dir = Direction::North});
+    REQUIRE_FALSE(refused);
+    CHECK(refused.error() == Rejection::AlreadyActed);
+}

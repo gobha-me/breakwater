@@ -36,6 +36,7 @@ func _run() -> void:
 	await _frames(3)
 
 	_check_picking()
+	await _check_preview()
 	_main.restart(78)
 	_check(_main.mission.get_seed() == 79, "a rejected seed is never played: 78 starts mission 79")
 	await _key(KEY_N)
@@ -75,6 +76,38 @@ func _check_picking() -> void:
 		# WASD shoves reach the covered one.
 		var covered: bool = picked != c and occupied.has(picked) and picked.y > c.y
 		_check(picked == c or covered, "unit at %s picked by its body%s" % [c, " (covered by %s)" % picked if covered else ""])
+
+
+## Hovering a shove target with an engineer selected shows the core's
+## predicted outcome, and moving away clears it.
+func _check_preview() -> void:
+	_main.restart(20)
+	await _frames(2)
+	var mission: BreakwaterMission = _main.mission
+	var units: Array = mission.get_units()
+	var e0 := Vector2i(units[0]["x"], units[0]["y"])
+	var target := Vector2i(units[2]["x"], units[2]["y"])  # Engineer 2 stands east of engineer 0 at seed 20.
+	_check(target - e0 == Vector2i(1, 0), "seed 20 opens with a shove target east of engineer 0")
+	await _click(e0)
+	var before := mission.get_state_hash()
+	await _move_mouse(target)
+	var expected: Dictionary = mission.preview_shove(0, BreakwaterMission.DIR_EAST)
+	_check(not _main.input.preview.shown.is_empty() and _main.input.preview.get_child_count() > 0,
+			"hovering a shove target shows a preview")
+	_check(expected["error"].is_empty() and not expected["events"].is_empty(), "the bridge's preview has the shove's events")
+	_check(mission.get_state_hash() == before and mission.take_events().is_empty(), "previewing changes nothing")
+	await _move_mouse(Vector2i(7, 7))
+	_check(_main.input.preview.shown.is_empty(), "moving off the target clears the preview")
+	await _key(KEY_ESCAPE)
+
+
+func _move_mouse(c: Vector2i) -> void:
+	var camera := root.get_viewport().get_camera_3d()
+	var event := InputEventMouseMotion.new()
+	event.position = camera.unproject_position(_main.board.top_of(c) + Vector3(0, 0.3, 0))
+	event.global_position = event.position
+	Input.parse_input_event(event)
+	await _frames(2)
 
 
 ## A simple scripted player that only acts through input events: each turn,
