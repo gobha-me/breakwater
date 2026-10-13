@@ -4,7 +4,7 @@ Phases run in order. Each ends with evidence, not a claim. The acceptance
 criteria being chased are in [the concept](CONCEPT.md); the numbers in
 parentheses say which criterion a phase closes.
 
-## Status, 2026-10-12
+## Status, 2026-10-13: vertical slice complete
 
 | Phase | State | Concept criterion |
 |---|---|---|
@@ -13,7 +13,10 @@ parentheses say which criterion a phase closes.
 | 2 Replay | Done (#24, #31, #32) | 3: `tools/replay_check.sh`, 12/12 identical |
 | 3 Playable | Done (#35, #40, #41, #46); captures in `docs/captures/` | 1: playable by input; 6: golden gate in place |
 | 4 Solver | Done (#36, #42) | 4: `tools/seeds_check.sh`, 993 proven, 7 rejected |
-| 5 Assets | Waiting on checkpoint C1 (#43) | 5; golden re-recorded with the assets |
+| 5 Assets | Done (#49): four Meshy assets, look A, provenance in `assets/PROVENANCE.md` | 5; 6: golden re-recorded |
+
+All six concept criteria are met and gated by `tools/check.sh`. Open for the
+owner: review of the look and confirmation of the Meshy licence (#49).
 
 Revised since the plan: crawlers now go for the town, strike for 2 and move 3
 (#19, #39). The solver showed the original rules never needed a shove.
