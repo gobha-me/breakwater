@@ -39,6 +39,7 @@ func _run() -> void:
 	await _check_preview()
 	await _check_undo()
 	await _check_strike_hover()
+	await _check_enemy_phase()
 	_main.restart(78)
 	_check(_main.mission.get_seed() == 79, "a rejected seed is never played: 78 starts mission 79")
 	await _key(KEY_N)
@@ -135,6 +136,33 @@ func _check_strike_hover() -> void:
 	_check(_main.units.highlighted_strike() == crawler, "hovering a crawler highlights its strike")
 	await _move_mouse(Vector2i(7, 7))
 	_check(_main.units.highlighted_strike() == -1, "moving off clears the highlight")
+
+
+## The enemy phase names its steps and actors, and Space skips it to the
+## same synced state.
+func _check_enemy_phase() -> void:
+	_main.restart(20)
+	await _frames(2)
+	var speed := Engine.time_scale
+	var marked: int = _main.units.actors_marked
+	for pressed in [true, false]:
+		var end := InputEventKey.new()
+		end.keycode = KEY_SPACE
+		end.pressed = pressed
+		Input.parse_input_event(end)
+		await _frames(1)
+	_check(_main.playing, "ending the turn starts the enemy phase playback")
+	await _frames(5)
+	await _key(KEY_SPACE)  # Skip; _key waits for playback to settle.
+	_check(not _main.playing and Engine.time_scale == speed, "Space skips the playback and restores its speed")
+	_check(not _main.hud.last_step.is_empty(), "the enemy phase announced a step (%s)" % _main.hud.last_step)
+	_check(_main.units.actors_marked > marked, "the acting crawler was marked")
+	var in_sync := true
+	for u in _main.mission.get_units():
+		if u["alive"]:
+			var root: Node3D = _main.units.root_of(int(u["id"]))
+			in_sync = in_sync and root != null and root.position.is_equal_approx(_main.board.top_of(Vector2i(u["x"], u["y"])))
+	_check(in_sync, "after skipping, every unit stands where the mission says")
 
 
 func _move_mouse(c: Vector2i) -> void:

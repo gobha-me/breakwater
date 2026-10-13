@@ -12,6 +12,10 @@ var _engineers: Label
 var _message: Label
 var _banner: Label
 var _hints: Label
+var _step: Label
+var _step_tween: Tween
+## The last enemy-phase step announced: for the input test.
+var last_step := ""
 
 
 func _ready() -> void:
@@ -40,6 +44,17 @@ func _ready() -> void:
 	_hints.text = ("Click an engineer   ·   green: move   ·   orange or WASD: shove   ·   Space: end turn"
 			+ "   ·   Z undo move   ·   Tab / Esc   ·   R restart   ·   N next   ·   F5 save")
 	add_child(_hints)
+
+	_step = Label.new()
+	_step.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
+	_step.offset_top = 24
+	_step.add_theme_font_size_override("font_size", 36)
+	_step.add_theme_constant_override("outline_size", 12)
+	_step.add_theme_color_override("font_outline_color", Color(0, 0, 0))
+	_step.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
+	_step.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_step.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	add_child(_step)
 
 	_banner = Label.new()
 	_banner.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
@@ -75,6 +90,18 @@ func sync(mission: BreakwaterMission) -> void:
 			_banner.add_theme_color_override("font_color", Color(1, 0.45, 0.4))
 		_:
 			_banner.text = ""
+
+
+## Announces an enemy-phase step at the top of the screen, fading after.
+func step(text: String) -> void:
+	last_step = text
+	_step.text = text
+	_step.modulate.a = 1.0
+	if _step_tween != null:
+		_step_tween.kill()
+	_step_tween = create_tween()
+	_step_tween.tween_interval(1.2)
+	_step_tween.tween_property(_step, "modulate:a", 0.0, 0.4)
 
 
 func say(text: String) -> void:

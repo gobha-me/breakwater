@@ -35,6 +35,22 @@ var units: UnitsView
 var hud: Hud
 var input: PlayInput
 var playing := false
+var _base_speed := 1.0
+var _skipping := false
+
+## Events only an enemy phase produces; a playback containing any is one.
+const ENEMY_PHASE_EVENTS := [BreakwaterMission.EVENT_ATTACK_RESOLVED, BreakwaterMission.EVENT_TIDE_ROSE,
+		BreakwaterMission.EVENT_UNIT_SPAWNED, BreakwaterMission.EVENT_TURN_STARTED]
+## Events a crawler performs, for the acting-crawler marker.
+const ACTOR_EVENTS := [BreakwaterMission.EVENT_ATTACK_RESOLVED, BreakwaterMission.EVENT_INTENT_DECLARED,
+		BreakwaterMission.EVENT_UNIT_SPAWNED, BreakwaterMission.EVENT_UNIT_MOVED]
+const STEP_NAMES := {
+	BreakwaterMission.EVENT_ATTACK_RESOLVED: "Crawlers strike",
+	BreakwaterMission.EVENT_TIDE_ROSE: "The tide rises",
+	BreakwaterMission.EVENT_UNIT_SPAWNED: "Crawlers come ashore",
+	BreakwaterMission.EVENT_UNIT_MOVED: "Crawlers move and take aim",
+	BreakwaterMission.EVENT_INTENT_DECLARED: "Crawlers move and take aim",
+}
 var save_dir := "user://logs"
 
 
@@ -52,7 +68,8 @@ func _ready() -> void:
 
 	var args := _user_args()
 	save_dir = args.get("save-dir", save_dir)
-	Engine.time_scale = float(args.get("speed", "8" if args.has("autoplay") else "1"))
+	_base_speed = float(args.get("speed", "8" if args.has("autoplay") else "1"))
+	Engine.time_scale = _base_speed
 	if args.has("log"):
 		_load_until(args["log"], int(args.get("after-turn", "-1")))
 	else:
@@ -142,11 +159,45 @@ func _sync() -> void:
 ## then re-syncs. Input should wait for playback_finished.
 func play_events() -> void:
 	playing = true
-	for e in mission.take_events():
+	var events := mission.take_events()
+	var enemy := false
+	for e in events:
+		enemy = enemy or int(e["kind"]) in ENEMY_PHASE_EVENTS
+	var step := ""
+	for e in events:
+		if enemy:
+			# Name each step of the enemy phase, and who is acting.
+			var name: String = STEP_NAMES.get(int(e["kind"]), step)
+			if int(e["kind"]) == BreakwaterMission.EVENT_UNIT_MOVED and not _is_crawler(int(e["unit"])):
+				name = step
+			if name != step and not name.is_empty():
+				step = name
+				hud.step(step)
+				await _wait(0.35)
+			units.mark_actor(int(e["unit"]) if int(e["kind"]) in ACTOR_EVENTS else -1)
 		await _play(e)
+		if enemy and int(e["kind"]) in ACTOR_EVENTS:
+			await _wait(0.12)
+	units.mark_actor(-1)
 	_sync()
+	if _skipping:
+		Engine.time_scale = _base_speed
+		_skipping = false
 	playing = false
 	playback_finished.emit()
+
+
+## Fast-forwards the playback in progress. The scene re-syncs from the
+## mission when playback ends, so skipping lands on exactly the same state.
+func skip() -> void:
+	if playing and not _skipping:
+		_skipping = true
+		Engine.time_scale = maxf(_base_speed, 30.0)
+
+
+func _is_crawler(id: int) -> bool:
+	var units_now := mission.get_units()
+	return id < units_now.size() and not units_now[id]["engineer"]
 
 
 func _play(e: Dictionary) -> void:

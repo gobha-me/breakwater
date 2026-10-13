@@ -21,10 +21,14 @@ var _max_hp := 2  # Refreshed from the mission on every sync.
 var _strikes: Node3D
 var _strike_arrows := {}  # crawler id -> arrow Node3D
 var _highlighted := -1
+var _actor_mark: Label3D
+## How many times an actor was marked: for the input test.
+var actors_marked := 0
 
 
 func build(board: BoardView) -> void:
 	_board = board
+	_actor_mark = null  # Freed with the children below; made again on demand.
 	for child in get_children():
 		child.queue_free()
 	_units.clear()
@@ -228,6 +232,32 @@ func _sync_strikes(mission: BreakwaterMission) -> void:
 			count.position = _board.top_of(to) + Vector3(0.45, 0.7, 0.45)
 			_strikes.add_child(count)
 	highlight_strike(_highlighted)
+
+
+## Marks the crawler acting in the enemy phase (−1 for none) with a yellow
+## chevron above it, drawn over everything.
+func mark_actor(id: int) -> void:
+	if _actor_mark == null:
+		_actor_mark = Label3D.new()
+		_actor_mark.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		_actor_mark.no_depth_test = true
+		_actor_mark.render_priority = 12
+		_actor_mark.font_size = 96
+		_actor_mark.outline_size = 20
+		_actor_mark.modulate = HIGHLIGHT_COLOR
+		_actor_mark.text = "▼"
+		_actor_mark.position.y = 1.05
+	# Always in the tree, so it is freed with the scene: parked hidden under
+	# this view when no crawler is acting.
+	var root := root_of(id) if id >= 0 else null
+	var parent: Node = root if root != null else self
+	if _actor_mark.get_parent() != parent:
+		if _actor_mark.get_parent() != null:
+			_actor_mark.get_parent().remove_child(_actor_mark)
+		parent.add_child(_actor_mark)
+	_actor_mark.visible = root != null
+	if root != null:
+		actors_marked += 1
 
 
 ## Highlights crawler `id`'s strike (−1 for none), as when hovering it.
