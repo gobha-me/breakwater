@@ -22,11 +22,19 @@
   - **`game/`**: with today's extension a clean first-time import passes 3/3,
     while at #35 it aborted 3/3.
 
-  So the trigger isn't a particular class of ours. It is the first import that
-  discovers a GDExtension mid-scan, and whether it bites depends on the
-  project's shape and scan timing. Godot builds aren't at fault one way or
-  the other: the official build behaves the same. A minimal reproduction with
-  a one-class extension is the next step (#77).
+  - **A one-class extension** (one empty `RefCounted`) in a bare project
+    aborts 5/5 on the official build. With `extension_list.cfg` pre-seeded it
+    passes 3/3, and without the extension it passes. See
+    `tools/repro/godot-first-import-crash/`.
+
+  So it's an **engine bug**, not anything in our extension: the first headless
+  import that discovers a GDExtension crashes at shutdown. Whether it bites
+  depends on the project's shape and scan timing. It matches
+  [godotengine/godot#123511](https://github.com/godotengine/godot/issues/123511),
+  a Windows report closed as *not planned* for not following the template.
+  The reproduction directory holds a template-shaped draft for a person to
+  file. Godot doesn't accept AI-generated reports, so none has been filed from
+  here.
 - **One more data point:** the first import after **switching** Godot builds
   over the same `.godot/` cache aborts once, in either direction, and every
   rerun passes. CI uses one build from a clean start. `tools/godot_smoke.sh`
