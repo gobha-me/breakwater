@@ -5,5 +5,6 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 source tools/display.sh
-"${display[@]}" "${GODOT_BIN:-godot}" --path game --resolution 1280x720 "${display_args[@]}" --disable-vsync \
+# A locked session suspends the window; time out instead of hanging.
+timeout 90 "${display[@]}" "${GODOT_BIN:-godot}" --path game --resolution 1280x720 "${display_args[@]}" --disable-vsync \
     --script res://tests/frame_time.gd -- --no-hints 2>&1 | grep '^frame_time:'
