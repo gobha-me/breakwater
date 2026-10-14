@@ -58,8 +58,12 @@ struct Tile {
 
 enum class UnitKind : std::uint8_t {
     Engineer, ///< Player unit. Cannot swim: drowns on a flooded tile.
-    Crawler,  ///< Sea creature. Amphibious.
+    Crawler,  ///< Sea creature. Amphibious. Its strike damages.
+    Rammer,   ///< Sea creature. Amphibious. Its strike pushes.
 };
+
+/// Crawlers and Rammers: they swim, never drown, and plan their own strikes.
+[[nodiscard]] constexpr bool is_creature(UnitKind kind) noexcept { return kind != UnitKind::Engineer; }
 
 using UnitId = std::size_t;
 

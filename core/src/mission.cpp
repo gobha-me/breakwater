@@ -119,19 +119,20 @@ using Distances = std::array<int, kTileCount>;
     return best;
 }
 
-/// No target in reach: close on the town. Ranked by distance to the nearest
-/// standing building, then steps, then y, then x. With no building standing,
-/// hold position.
-[[nodiscard]] Coord approach_town(const Board& board, const Distances& distance, Coord from) {
+/// No target in reach: close on the quarry. Ranked by `nearest` (distance to
+/// the nearest building or engineer), then steps, then y, then x. With no
+/// quarry left, hold position.
+template <typename Nearest>
+[[nodiscard]] Coord approach(const Board& board, const Distances& distance, Coord from, Nearest nearest) {
     Coord dest = from;
     auto best_key = std::tuple{std::numeric_limits<int>::max(), 0, 0, 0};
     for (std::size_t i = 0; i < kTileCount; ++i) {
         const Coord c = tile_coord(i);
-        const auto town = nearest_building(board, c);
-        if (distance.at(i) == kUnreachable || !town) {
+        const auto quarry = nearest(board, c);
+        if (distance.at(i) == kUnreachable || !quarry) {
             continue;
         }
-        if (const auto key = std::tuple{*town, distance.at(i), c.y, c.x}; key < best_key) {
+        if (const auto key = std::tuple{*quarry, distance.at(i), c.y, c.x}; key < best_key) {
             best_key = key;
             dest = c;
         }
@@ -139,11 +140,78 @@ using Distances = std::array<int, kTileCount>;
     return dest;
 }
 
+/// What a ram from `dest` in `dir` would cost the player, in HP of engineers
+/// and buildings, judged on the board as it stands with the Rammer itself
+/// (`self`) moved off its tile (docs/RULES.md, "Rammer intent").
+[[nodiscard]] int ram_harm(const Board& board, UnitId self, Coord dest, Direction dir) {
+    const Coord target = step(dest, dir);
+    if (board.tile(target).building_hp > 0) {
+        return 1; // Rammed directly: a bump.
+    }
+    const auto victim = board.unit_at(target);
+    if (!victim || *victim == self) {
+        return 0;
+    }
+    const bool engineer = board.unit(*victim).kind == UnitKind::Engineer;
+    const Coord landing = step(target, dir);
+    if (!in_bounds(landing)) {
+        return engineer ? 1 : 0;
+    }
+    if (board.tile(landing).building_hp > 0) {
+        return engineer ? 2 : 1;
+    }
+    if (const auto blocker = board.unit_at(landing); blocker && *blocker != self) {
+        const bool blocker_engineer = board.unit(*blocker).kind == UnitKind::Engineer;
+        return (engineer ? 1 : 0) + (blocker_engineer ? 1 : 0);
+    }
+    if (!engineer) {
+        return 0;
+    }
+    if (board.flooded(landing)) {
+        return board.unit(*victim).hp;
+    }
+    // Shifting an engineer off a guard post next to the town opens the way.
+    for (const Direction d : kDirections) {
+        const Coord next = step(target, d);
+        if (in_bounds(next) && board.tile(next).building_hp > 0) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+/// The Rammer's most harmful ram over every reachable destination and
+/// direction, or empty if no ram would harm anything.
+[[nodiscard]] std::optional<Plan> best_ram(const Board& board, UnitId self, const Distances& distance) {
+    std::optional<Plan> best;
+    for (std::size_t i = 0; i < kTileCount; ++i) {
+        if (distance.at(i) == kUnreachable) {
+            continue;
+        }
+        const Coord dest = tile_coord(i);
+        for (const Direction dir : kDirections) {
+            if (!in_bounds(step(dest, dir))) {
+                continue;
+            }
+            const int harm = ram_harm(board, self, dest, dir);
+            if (harm == 0) {
+                continue;
+            }
+            // Most harm first: the key's first field is lowest-wins.
+            const Plan plan{.target_class = -harm, .steps = distance.at(i), .dest = dest, .dir = dir};
+            if (!best || plan.key() < best->key()) {
+                best = plan;
+            }
+        }
+    }
+    return best;
+}
+
 } // namespace
 
 Mission::Mission(std::uint64_t seed, Board board, Setup setup)
     : board_{std::move(board)}, seed_{seed}, actions_(board_.unit_count(), ActionState::Ready),
-      intents_{std::move(setup.intents)}, spawns_{setup.spawns} {
+      intents_{std::move(setup.intents)}, spawns_{setup.spawns}, rammers_{setup.rammers} {
     assert(setup.turn >= 1 && setup.turn <= kTurnCount);
     turn_ = setup.turn;
     intents_.resize(board_.unit_count());
@@ -294,39 +362,42 @@ std::expected<void, Rejection> Mission::apply_shove(const ShoveCommand& shove) {
         return std::unexpected{Rejection::NothingToShove};
     }
 
-    const Coord landing = step(target, shove.dir);
-    const auto blocker = in_bounds(landing) ? board_.unit_at(landing) : std::nullopt;
     actions_.at(shove.engineer) = ActionState::Done;
+    push_and_report(*victim, target, shove.dir);
+    return {};
+}
 
-    const PushOutcome outcome = board_.push(*victim, shove.dir);
-    const Coord after = board_.unit(*victim).pos;
-    events_.push_back({.kind = EventKind::UnitShoved, .unit = *victim, .from = target, .to = after});
+void Mission::push_and_report(UnitId victim, Coord at, Direction dir) {
+    const Coord landing = step(at, dir);
+    const auto blocker = in_bounds(landing) ? board_.unit_at(landing) : std::nullopt;
+    const PushOutcome outcome = board_.push(victim, dir);
+    const Coord after = board_.unit(victim).pos;
+    events_.push_back({.kind = EventKind::UnitShoved, .unit = victim, .from = at, .to = after});
     switch (outcome) {
     case PushOutcome::Moved:
     case PushOutcome::NoEffect:
         break;
     case PushOutcome::BlockedByEdge:
-        emit_damage(*victim);
+        emit_damage(victim);
         break;
     case PushOutcome::BlockedByUnit:
-        emit_damage(*victim);
+        emit_damage(victim);
         if (blocker) { // Always set: it is what blocked the push.
             emit_damage(*blocker);
         }
         break;
     case PushOutcome::BlockedByBuilding:
-        emit_damage(*victim);
+        emit_damage(victim);
         events_.push_back({.kind = EventKind::BuildingDamaged,
-                           .unit = *victim,
-                           .from = target,
+                           .unit = victim,
+                           .from = at,
                            .to = landing,
                            .value = board_.tile(landing).building_hp});
         break;
     case PushOutcome::Drowned:
-        events_.push_back({.kind = EventKind::UnitDrowned, .unit = *victim, .from = target, .to = after});
+        events_.push_back({.kind = EventKind::UnitDrowned, .unit = victim, .from = at, .to = after});
         break;
     }
-    return {};
 }
 
 void Mission::apply_end_turn() {
@@ -386,6 +457,10 @@ void Mission::resolve_attacks() {
         if (!in_bounds(at)) {
             continue; // Shoved to the edge and facing off the board: a miss.
         }
+        if (board_.unit(id).kind == UnitKind::Rammer) {
+            ram(id, at, *dir);
+            continue;
+        }
         if (const auto victim = board_.unit_at(at)) {
             board_.damage_unit(*victim, kAttackDamage);
             emit_damage(*victim);
@@ -397,6 +472,21 @@ void Mission::resolve_attacks() {
                                .to = at,
                                .value = board_.tile(at).building_hp});
         }
+    }
+}
+
+void Mission::ram(UnitId id, Coord at, Direction dir) {
+    // A ram is a push with the Rammer's weight behind it: a unit there is
+    // pushed by Board::push's rules; a building there takes a bump.
+    if (const auto victim = board_.unit_at(at)) {
+        push_and_report(*victim, at, dir);
+    } else if (board_.tile(at).building_hp > 0) {
+        board_.damage_building(at, kBumpDamage);
+        events_.push_back({.kind = EventKind::BuildingDamaged,
+                           .unit = id,
+                           .from = board_.unit(id).pos,
+                           .to = at,
+                           .value = board_.tile(at).building_hp});
     }
 }
 
@@ -416,13 +506,14 @@ void Mission::spawn_crawlers(int count) {
     // One draw per spawn from this turn's stream; candidates are recomputed
     // after each placement (docs/RULES.md, "Spawns").
     Rng rng = make_turn_stream(seed_, Stream::Spawns, turn_);
+    const int rammers = rammers_.at(static_cast<std::size_t>(turn_));
     for (int i = 0; i < count; ++i) {
         const auto tiles = spawn_tiles(board_);
         if (tiles.empty()) {
             return;
         }
         const Coord at = tiles.at(rng.below(static_cast<std::uint32_t>(tiles.size())));
-        const UnitId id = board_.add_unit(UnitKind::Crawler, at, kUnitHp);
+        const UnitId id = board_.add_unit(i < rammers ? UnitKind::Rammer : UnitKind::Crawler, at, kUnitHp);
         actions_.push_back(ActionState::Ready);
         intents_.emplace_back(std::nullopt);
         events_.push_back({.kind = EventKind::UnitSpawned, .unit = id, .from = at, .to = at, .value = 0});
@@ -431,8 +522,13 @@ void Mission::spawn_crawlers(int count) {
 
 void Mission::plan_crawlers() {
     for (UnitId id = 0; id < board_.unit_count(); ++id) {
-        if (board_.unit(id).kind == UnitKind::Crawler && board_.unit(id).alive()) {
+        if (!board_.unit(id).alive()) {
+            continue;
+        }
+        if (board_.unit(id).kind == UnitKind::Crawler) {
             plan_crawler(id);
+        } else if (board_.unit(id).kind == UnitKind::Rammer) {
+            plan_rammer(id);
         }
     }
 }
@@ -445,7 +541,7 @@ void Mission::plan_crawler(UnitId id) {
     // town, and strikes an engineer only if one is next to where it stops:
     // engineers cannot lure crawlers away from the town.
     const auto plan = best_attack(board_, distance);
-    const Coord dest = plan ? plan->dest : approach_town(board_, distance, from);
+    const Coord dest = plan ? plan->dest : approach(board_, distance, from, nearest_building);
     if (dest != from) {
         board_.place(id, dest);
         events_.push_back({.kind = EventKind::UnitMoved, .unit = id, .from = from, .to = dest, .value = 0});
@@ -460,12 +556,31 @@ void Mission::plan_crawler(UnitId id) {
             }
         }
     }
+    declare(id, dest, intent);
+}
+
+void Mission::plan_rammer(UnitId id) {
+    const Coord from = board_.unit(id).pos;
+    const auto distance =
+        step_distances(from, kCrawlerMoveRange, [this](Coord c) { return crawler_can_enter(board_, c); });
+    // The ram that harms most in reach; otherwise the Rammer marches on the
+    // town like a crawler and declares nothing.
+    const auto plan = best_ram(board_, id, distance);
+    const Coord dest = plan ? plan->dest : approach(board_, distance, from, nearest_building);
+    if (dest != from) {
+        board_.place(id, dest);
+        events_.push_back({.kind = EventKind::UnitMoved, .unit = id, .from = from, .to = dest, .value = 0});
+    }
+    declare(id, dest, plan ? Intent{plan->dir} : std::nullopt);
+}
+
+void Mission::declare(UnitId id, Coord at, Intent intent) {
     intents_.at(id) = intent;
     if (intent) {
         events_.push_back({.kind = EventKind::IntentDeclared,
                            .unit = id,
-                           .from = dest,
-                           .to = step(dest, *intent),
+                           .from = at,
+                           .to = step(at, *intent),
                            .value = static_cast<int>(*intent)});
     }
 }
@@ -491,6 +606,9 @@ std::uint64_t Mission::state_hash() const noexcept {
         detail::fnv_bytes(hash, i ? static_cast<std::uint64_t>(*i) : 0xFFU, 1);
     }
     for (const int count : spawns_) {
+        detail::fnv_int(hash, count);
+    }
+    for (const int count : rammers_) {
         detail::fnv_int(hash, count);
     }
     detail::fnv_int(hash, town_size_);

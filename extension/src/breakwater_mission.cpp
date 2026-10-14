@@ -234,6 +234,7 @@ godot::Array BreakwaterMission::units_of(const Mission& mission) {
         godot::Dictionary d;
         d["id"] = static_cast<int64_t>(id);
         d["engineer"] = u.kind == UnitKind::Engineer;
+        d["rammer"] = u.kind == UnitKind::Rammer;
         d["x"] = u.pos.x;
         d["y"] = u.pos.y;
         d["hp"] = std::max(u.hp, 0);

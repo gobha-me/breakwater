@@ -18,6 +18,8 @@ inline constexpr int kUnitHp = 2;
 inline constexpr int kEngineerMoveRange = 2;
 inline constexpr int kCrawlerMoveRange = 3;
 inline constexpr int kAttackDamage = 2;
+/// A bump: a blocked push, or a ram into a building.
+inline constexpr int kBumpDamage = 1;
 inline constexpr int kDeployRow = 4;
 inline constexpr int kStartTide = 1;
 inline constexpr int kTurnCount = 5;
@@ -43,7 +45,10 @@ enum class ActionState : std::uint8_t {
 /// The last turn has no entry: nothing spawns or plans after it.
 using SpawnTable = std::array<int, kTurnCount>;
 
-inline constexpr SpawnTable kSpawnTable{2, 1, 1, 1, 0};
+inline constexpr SpawnTable kSpawnTable{2, 2, 1, 1, 0};
+
+/// How many of each entry's spawns are Rammers; they come ashore first.
+inline constexpr SpawnTable kRammerTable{0, 1, 0, 0, 0};
 
 /// A crawler's telegraphed attack: the direction it will strike next enemy
 /// phase, from wherever it stands then. Empty means no attack. A direction, not
@@ -57,6 +62,8 @@ struct Setup {
     std::vector<Intent> intents;
     /// Spawns per turn. Scenarios that must not be disturbed pass zeros.
     SpawnTable spawns = kSpawnTable;
+    /// Rammers among those spawns, by turn.
+    SpawnTable rammers = kRammerTable;
     /// The turn the scenario starts on, 1 to kTurnCount.
     int turn = 1;
 };
@@ -168,8 +175,8 @@ public:
     /// Razed buildings that lose the mission: kTownFallsAfter, or the whole
     /// town if it is smaller. 0 for a mission without buildings.
     [[nodiscard]] int town_falls_after() const noexcept;
-    /// What crawler `id` will strike next enemy phase. Empty for engineers, the
-    /// dead, and crawlers with no target. Precondition: `id` names a unit.
+    /// What creature `id` will strike next enemy phase. Empty for engineers, the
+    /// dead, and creatures with no target. Precondition: `id` names a unit.
     [[nodiscard]] Intent intent(UnitId id) const;
 
     /// Tiles the engineer may move to this turn, row-major. Empty when the
@@ -191,7 +198,7 @@ public:
 
     /// FNV-1a over everything that decides the future: the board, the seed
     /// (later draws derive from it), the turn, the action states, the intents,
-    /// the spawn table, the town's starting size and the outcome.
+    /// the spawn tables, the town's starting size and the outcome.
     [[nodiscard]] std::uint64_t state_hash() const noexcept;
 
 private:
@@ -206,6 +213,12 @@ private:
     void spawn_crawlers(int count);
     void plan_crawlers();
     void plan_crawler(UnitId id);
+    void plan_rammer(UnitId id);
+    void declare(UnitId id, Coord at, Intent intent);
+    void ram(UnitId id, Coord at, Direction dir);
+    /// Pushes `victim` from `at` and reports what happened: the shared end of a
+    /// shove and a ram.
+    void push_and_report(UnitId victim, Coord at, Direction dir);
     void emit_damage(UnitId id);
     /// Ends the mission as lost if the last engineer or building is gone, and
     /// says whether it did.
@@ -218,6 +231,7 @@ private:
     std::vector<ActionState> actions_; ///< Indexed by UnitId.
     std::vector<Intent> intents_;      ///< Indexed by UnitId.
     SpawnTable spawns_ = kSpawnTable;
+    SpawnTable rammers_ = kRammerTable;
     Outcome outcome_ = Outcome::InProgress;
     /// Whether the mission started with any engineer, and with how many
     /// buildings. Neither can be created later, so a hand-built board without

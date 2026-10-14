@@ -1,7 +1,6 @@
 extends Node3D
-## Engineers, crawlers and the crawlers' telegraphed strikes. Placeholder
-## shapes until the Meshy assets land (Phase 5). Holds no rules: positions,
-## HP and intents all come from the bridge.
+## Engineers, crawlers, Rammers and the creatures' telegraphed strikes and
+## rams. Holds no rules: positions, HP and intents all come from the bridge.
 
 const ENGINEER_COLORS := [Color(0.95, 0.55, 0.15), Color(0.2, 0.75, 0.75), Color(0.65, 0.4, 0.9)]
 const CRAWLER_COLOR := Color(0.2, 0.45, 0.25)
@@ -11,11 +10,14 @@ const HURT := Color(0.1, 0.02, 0.02, 0.45)
 const CLEAR := Color(1, 0.15, 0.1, 0.0)
 const FLASH := Color(1, 0.15, 0.1, 0.75)
 const STRIKE_COLOR := Color(0.95, 0.15, 0.1)
+## A ram pushes rather than damages, so it reads in its own colour.
+const RAM_COLOR := Color(0.75, 0.3, 1.0)
 const HIGHLIGHT_COLOR := Color(1.0, 0.85, 0.1)
 const DIRS := [Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0)]
 const BoardView := preload("res://scripts/board_view.gd")
 const ENGINEER_MODEL := "res://assets/models/engineer.glb"
 const CRAWLER_MODEL := "res://assets/models/crawler.glb"
+const RAMMER_MODEL := "res://assets/models/rammer.glb"
 ## Sizes the bodies are fitted to, in tiles. play_input.gd's pick boxes use
 ## the same heights.
 const ENGINEER_SIZE := Vector2(0.7, 1.0)  # Footprint, height.
@@ -28,7 +30,8 @@ var _board: BoardView
 var _units := {}  # id -> {"root": Node3D, "ring": HealthRing, "flash": StandardMaterial3D, "engineer": bool}
 var _max_hp := 2  # Refreshed from the mission on every sync.
 var _strikes: Node3D
-var _strike_arrows := {}  # crawler id -> arrow Node3D
+var _strike_arrows := {}  # creature id -> arrow Node3D
+var _strike_colors := {}  # creature id -> its resting colour
 var _highlighted := -1
 var _actor_mark: Label3D
 
@@ -49,7 +52,7 @@ func sync(mission: BreakwaterMission) -> void:
 	for u in mission.get_units():
 		var id: int = u["id"]
 		if not _units.has(id):
-			_create(id, u["engineer"])
+			_create(id, u["engineer"], u["rammer"])
 		var view: Dictionary = _units[id]
 		var root: Node3D = view["root"]
 		root.visible = u["alive"]
@@ -112,9 +115,9 @@ func tween_sink(id: int) -> Tween:
 	return tween
 
 
-func tween_spawn(id: int, engineer: bool, at: Vector3) -> Tween:
+func tween_spawn(id: int, rammer: bool, at: Vector3) -> Tween:
 	if not _units.has(id):
-		_create(id, engineer)
+		_create(id, false, rammer)
 	var root := root_of(id)
 	root.visible = true
 	root.position = at - Vector3(0, 0.5, 0)
@@ -123,15 +126,16 @@ func tween_spawn(id: int, engineer: bool, at: Vector3) -> Tween:
 	return tween
 
 
-func _create(id: int, engineer: bool) -> void:
+func _create(id: int, engineer: bool, rammer: bool) -> void:
 	var root := Node3D.new()
-	root.name = ("Engineer%d" if engineer else "Crawler%d") % id
+	root.name = ("Engineer%d" if engineer else ("Rammer%d" if rammer else "Crawler%d")) % id
 	add_child(root)
 
 	var size := ENGINEER_SIZE if engineer else CRAWLER_SIZE
-	var body := ModelFit.instance(ENGINEER_MODEL if engineer else CRAWLER_MODEL, size.x, size.y)
+	var model := ENGINEER_MODEL if engineer else (RAMMER_MODEL if rammer else CRAWLER_MODEL)
+	var body := ModelFit.instance(model, size.x, size.y)
 	if body == null:
-		body = _placeholder(engineer)
+		body = _placeholder(engineer, rammer)
 	root.add_child(body)
 
 	# Health lives on the ground: a ring of one arc per hit point. Engineers'
@@ -155,7 +159,7 @@ func _create(id: int, engineer: bool) -> void:
 	_units[id] = {"root": root, "ring": ring, "flash": flash, "engineer": engineer, "id": id}
 
 
-func _placeholder(engineer: bool) -> Node3D:
+func _placeholder(engineer: bool, rammer: bool) -> Node3D:
 	var body := MeshInstance3D.new()
 	var mat := StandardMaterial3D.new()
 	if engineer:
@@ -171,7 +175,7 @@ func _placeholder(engineer: bool) -> Node3D:
 		sphere.height = 0.36
 		body.mesh = sphere
 		body.position.y = 0.18
-		mat.albedo_color = CRAWLER_COLOR
+		mat.albedo_color = RAM_COLOR.darkened(0.4) if rammer else CRAWLER_COLOR
 	body.material_override = mat
 	var holder := Node3D.new()
 	holder.add_child(body)
@@ -185,13 +189,16 @@ static func _set_overlay(node: Node, overlay: Material) -> void:
 		_set_overlay(child, overlay)
 
 
-## One red arrow and one red tile marker per telegraphed strike.
+## One arrow and one tile marker per telegraphed strike: red for a crawler's
+## strike, violet for a Rammer's ram, whose arrow runs on through the target
+## to the tile it would be pushed onto.
 func _sync_strikes(mission: BreakwaterMission) -> void:
 	for child in _strikes.get_children():
 		child.queue_free()
 	_strike_arrows.clear()
+	_strike_colors.clear()
 	# Group strikes by target, so several on one tile stay distinguishable.
-	var by_target := {}  # Vector2i -> Array of [crawler id, from]
+	var by_target := {}  # Vector2i -> Array of [creature id, from, rammer]
 	for u in mission.get_units():
 		if not u["alive"] or int(u["intent"]) < 0:
 			continue
@@ -199,25 +206,37 @@ func _sync_strikes(mission: BreakwaterMission) -> void:
 		var to: Vector2i = from + DIRS[int(u["intent"])]
 		if not by_target.has(to):
 			by_target[to] = []
-		by_target[to].append([int(u["id"]), from])
+		by_target[to].append([int(u["id"]), from, bool(u["rammer"])])
 	for to in by_target:
 		var strikes: Array = by_target[to]
+		var all_rams := true
 		for i in strikes.size():
 			var id: int = strikes[i][0]
 			var from: Vector2i = strikes[i][1]
+			var rammer: bool = strikes[i][2]
+			all_rams = all_rams and rammer
+			var color := RAM_COLOR if rammer else STRIKE_COLOR
+			var end: Vector2i = to + (to - from) if rammer else to
 			# Flat on the ground, from the crawler's tile to its target, and
 			# drawn over everything (see _strike_material), so no body in front
 			# can hide a telegraph and the direction reads from above. Strikes
 			# sharing a target shift sideways so opposite ones don't merge.
 			var lift := Vector3(0, 0.08, 0)
 			var a := _board.top_of(from) + lift
-			var b := Vector3(_board.top_of(to).x, a.y, _board.top_of(to).z)
+			var b := _board.top_of(to)
+			if rammer:
+				# Half a tile into the landing tile: the push, not just the hit.
+				b = b.lerp(_board.top_of(to) + (_board.top_of(to) - _board.top_of(from)), 0.5)
+			b.y = a.y
 			var side := Vector3(-(b - a).z, 0.0, (b - a).x).normalized()
 			var shift := side * (0.14 * (i - (strikes.size() - 1) * 0.5)) if strikes.size() > 1 else Vector3.ZERO
-			var arrow := _arrow(a + shift, b + shift)
+			var arrow := _arrow(a + shift, b + shift, color)
 			_strikes.add_child(arrow)
 			_strike_arrows[id] = arrow
-		_strikes.add_child(_marker(_board.top_of(to)))
+			_strike_colors[id] = color
+			if rammer and _board.on_board(end):
+				_strikes.add_child(_landing(_board.top_of(end)))
+		_strikes.add_child(_marker(_board.top_of(to), RAM_COLOR if all_rams else STRIKE_COLOR))
 		if strikes.size() > 1:
 			var count := Label3D.new()
 			count.billboard = BaseMaterial3D.BILLBOARD_ENABLED
@@ -262,9 +281,9 @@ func mark_actor(id: int) -> void:
 ## Highlights crawler `id`'s strike (−1 for none), as when hovering it.
 func highlight_strike(id: int) -> void:
 	_highlighted = id
-	for crawler in _strike_arrows:
-		var arrow: Node3D = _strike_arrows[crawler]
-		var mat: Material = _strike_material(HIGHLIGHT_COLOR if crawler == id else STRIKE_COLOR)
+	for creature in _strike_arrows:
+		var arrow: Node3D = _strike_arrows[creature]
+		var mat: Material = _strike_material(HIGHLIGHT_COLOR if creature == id else _strike_colors[creature])
 		for part in arrow.get_children():
 			(part as MeshInstance3D).material_override = mat
 
@@ -285,9 +304,9 @@ func _strike_material(color: Color) -> StandardMaterial3D:
 	return mat
 
 
-func _arrow(a: Vector3, b: Vector3) -> Node3D:
+func _arrow(a: Vector3, b: Vector3, color: Color) -> Node3D:
 	var arrow := Node3D.new()
-	var mat := _strike_material(STRIKE_COLOR)
+	var mat := _strike_material(color)
 	var length := a.distance_to(b) * 0.8
 	var shaft := MeshInstance3D.new()
 	var box := BoxMesh.new()
@@ -314,12 +333,10 @@ func _arrow(a: Vector3, b: Vector3) -> Node3D:
 ## The struck tile: a hollow red frame at the tile's edge, drawn over
 ## everything like the arrow, so the target inside (its health ring, its hurt
 ## tint) still shows through.
-func _marker(top: Vector3) -> Node3D:
+func _marker(top: Vector3, color: Color, edge := 0.44, width := 0.07) -> Node3D:
 	var frame := Node3D.new()
 	frame.position = top + Vector3(0, 0.04, 0)
-	var mat := _strike_material(STRIKE_COLOR)
-	var edge := 0.44
-	var width := 0.07
+	var mat := _strike_material(color)
 	for side in [Vector3(0, 0, -edge), Vector3(0, 0, edge), Vector3(-edge, 0, 0), Vector3(edge, 0, 0)]:
 		var bar := MeshInstance3D.new()
 		var box := BoxMesh.new()
@@ -330,3 +347,9 @@ func _marker(top: Vector3) -> Node3D:
 		bar.position = side
 		frame.add_child(bar)
 	return frame
+
+
+## Where a ram would push its target: a small, faint frame, so it reads as
+## "lands here" and not as a second hit.
+func _landing(top: Vector3) -> Node3D:
+	return _marker(top, Color(RAM_COLOR, 0.6), 0.22, 0.05)

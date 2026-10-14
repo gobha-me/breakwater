@@ -83,7 +83,7 @@ func build(mission: BreakwaterMission) -> void:
 
 ## World position of the top centre of tile `c`.
 func top_of(c: Vector2i) -> Vector3:
-	var elevation := _mission.get_elevation(c.x, c.y) if _on_board(c) else 0
+	var elevation := _mission.get_elevation(c.x, c.y) if on_board(c) else 0
 	return Vector3(c.x * TILE, tile_top(elevation), c.y * TILE)
 
 
@@ -310,7 +310,7 @@ static func _set_overlay(node: Node, overlay: Material) -> void:
 		_set_overlay(child, overlay)
 
 
-func _on_board(c: Vector2i) -> bool:
+func on_board(c: Vector2i) -> bool:
 	return c.x >= 0 and c.x < _size and c.y >= 0 and c.y < _size
 
 

@@ -252,6 +252,11 @@ func _is_crawler(id: int) -> bool:
 	return id < units_now.size() and not units_now[id]["engineer"]
 
 
+func _is_rammer(id: int) -> bool:
+	var units_now := mission.get_units()
+	return id < units_now.size() and units_now[id]["rammer"]
+
+
 func _play(e: Dictionary) -> void:
 	var id: int = e["unit"]
 	var to := board.top_of(e["to"])
@@ -274,7 +279,7 @@ func _play(e: Dictionary) -> void:
 		BreakwaterMission.EVENT_TIDE_ROSE:
 			tween = board.tween_tide(e["value"], 0.5)
 		BreakwaterMission.EVENT_UNIT_SPAWNED:
-			tween = units.tween_spawn(id, false, to)
+			tween = units.tween_spawn(id, _is_rammer(id), to)
 		BreakwaterMission.EVENT_TURN_STARTED, BreakwaterMission.EVENT_MISSION_ENDED:
 			hud.sync(mission)
 		BreakwaterMission.EVENT_INTENT_DECLARED:
