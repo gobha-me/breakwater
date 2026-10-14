@@ -8,7 +8,8 @@
 //       fails unless the seeds it cannot prove are exactly kRejectedSeeds,
 //       and every witness wins (concept criterion 4).
 //   bw_solve --range A-B [--budget N] [--no-shove]
-//       One line per seed (seed, verdict, nodes, milliseconds), then a
+//       One line per seed (seed, verdict, nodes, milliseconds, and the
+//       witness's shoves and pulls), then a
 //       summary. Witnesses are replayed in-process; a witness that does not
 //       win is a solver bug and fails the run.
 //
@@ -101,7 +102,12 @@ int solve_range(std::uint64_t first, std::uint64_t last, SolveOptions options) {
         ++counts.at(static_cast<std::size_t>(result.verdict));
         total_nodes += result.nodes;
         max_nodes = std::max(max_nodes, result.nodes);
-        std::cout << std::format("{} {} {} {:.1f}{}\n", seed, verdict_name(result.verdict), result.nodes, ms,
+        const auto count = [&result]<typename T>(T /*kind*/) {
+            return std::ranges::count_if(result.witness,
+                                         [](const breakwater::Command& c) { return std::holds_alternative<T>(c); });
+        };
+        std::cout << std::format("{} {} {} {:.1f} {} {}{}\n", seed, verdict_name(result.verdict), result.nodes, ms,
+                                 count(breakwater::ShoveCommand{}), count(breakwater::PullCommand{}),
                                  ok ? "" : " WITNESS-FAILED");
     }
     const auto seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();

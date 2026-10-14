@@ -126,6 +126,10 @@ godot::Dictionary BreakwaterMission::parse_log(const godot::String& text) {
                 d["verb"] = "shove";
                 d["engineer"] = static_cast<int64_t>(shove->engineer);
                 d["dir"] = static_cast<int64_t>(shove->dir);
+            } else if (const auto* pull = std::get_if<PullCommand>(&command)) {
+                d["verb"] = "pull";
+                d["engineer"] = static_cast<int64_t>(pull->engineer);
+                d["dir"] = static_cast<int64_t>(pull->dir);
             } else {
                 d["verb"] = "end";
             }
@@ -146,7 +150,7 @@ godot::String BreakwaterMission::apply(const Command& command) {
     } else {
         undo_.clear();
         undo_blocked_ =
-            std::holds_alternative<ShoveCommand>(command) ? "a shove cannot be undone" : "the turn has ended";
+            std::holds_alternative<EndTurnCommand>(command) ? "the turn has ended" : "a shove or pull cannot be undone";
     }
     log_.commands.push_back(command);
     return {};
@@ -174,6 +178,13 @@ godot::String BreakwaterMission::shove(int64_t engineer, int64_t dir) {
         return "unknown direction";
     }
     return apply(ShoveCommand{.engineer = to_unit_id(engineer), .dir = static_cast<Direction>(dir)});
+}
+
+godot::String BreakwaterMission::pull(int64_t engineer, int64_t dir) {
+    if (dir < DIR_NORTH || dir > DIR_WEST) {
+        return "unknown direction";
+    }
+    return apply(PullCommand{.engineer = to_unit_id(engineer), .dir = static_cast<Direction>(dir)});
 }
 
 godot::String BreakwaterMission::end_turn() { return apply(EndTurnCommand{}); }
@@ -272,15 +283,33 @@ godot::Array BreakwaterMission::events_of(const std::vector<Event>& events) {
 godot::Array BreakwaterMission::take_events() { return events_of(mission_.take_events()); }
 
 godot::Dictionary BreakwaterMission::preview_shove(int64_t engineer, int64_t dir) const {
+    if (dir < DIR_NORTH || dir > DIR_WEST) {
+        godot::Dictionary out;
+        out["error"] = "unknown direction";
+        out["events"] = godot::Array{};
+        out["units"] = godot::Array{};
+        return out;
+    }
+    return preview_command(ShoveCommand{.engineer = to_unit_id(engineer), .dir = static_cast<Direction>(dir)});
+}
+
+godot::Dictionary BreakwaterMission::preview_pull(int64_t engineer, int64_t dir) const {
+    if (dir < DIR_NORTH || dir > DIR_WEST) {
+        godot::Dictionary out;
+        out["error"] = "unknown direction";
+        out["events"] = godot::Array{};
+        out["units"] = godot::Array{};
+        return out;
+    }
+    return preview_command(PullCommand{.engineer = to_unit_id(engineer), .dir = static_cast<Direction>(dir)});
+}
+
+godot::Dictionary BreakwaterMission::preview_command(const Command& command) const {
     godot::Dictionary out;
     out["error"] = godot::String{};
     out["events"] = godot::Array{};
     out["units"] = godot::Array{};
-    if (dir < DIR_NORTH || dir > DIR_WEST) {
-        out["error"] = "unknown direction";
-        return out;
-    }
-    auto next = mission_.preview(ShoveCommand{.engineer = to_unit_id(engineer), .dir = static_cast<Direction>(dir)});
+    auto next = mission_.preview(command);
     if (!next) {
         out["error"] = to_godot(describe(next.error()));
         return out;
@@ -308,8 +337,10 @@ void BreakwaterMission::_bind_methods() {
                                 &BreakwaterMission::next_offered);
     ClassDB::bind_static_method("BreakwaterMission", D_METHOD("parse_log", "text"), &BreakwaterMission::parse_log);
     ClassDB::bind_method(D_METHOD("preview_shove", "engineer", "dir"), &BreakwaterMission::preview_shove);
+    ClassDB::bind_method(D_METHOD("preview_pull", "engineer", "dir"), &BreakwaterMission::preview_pull);
     ClassDB::bind_method(D_METHOD("move", "engineer", "x", "y"), &BreakwaterMission::move);
     ClassDB::bind_method(D_METHOD("shove", "engineer", "dir"), &BreakwaterMission::shove);
+    ClassDB::bind_method(D_METHOD("pull", "engineer", "dir"), &BreakwaterMission::pull);
     ClassDB::bind_method(D_METHOD("end_turn"), &BreakwaterMission::end_turn);
     ClassDB::bind_method(D_METHOD("undo"), &BreakwaterMission::undo);
     ClassDB::bind_method(D_METHOD("can_undo"), &BreakwaterMission::can_undo);

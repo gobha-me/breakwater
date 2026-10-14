@@ -81,21 +81,45 @@ Each engineer acts once per turn, and the player chooses the order:
 1. **Move** (optional): to any tile within 2 steps over dry tiles with no
    building and no unit. Moving into water is never legal; drowning happens
    only by being shoved or by the tide.
-2. **Shove** (optional, after or instead of the move): push the unit on an
-   adjacent tile one tile further away. It may be a crawler or an engineer.
-   A shove ends the engineer's turn.
+2. **Act** (optional, after or instead of the move), with one of two tools.
+   Either one ends the engineer's turn.
+   - **Shove:** push the unit on an adjacent tile one tile further away.
+   - **Harpoon pull:** pull the unit exactly two tiles away, in a straight line,
+     one tile toward the engineer, onto the tile between them.
 
-Shove resolution is `Board::push`:
+   Either may target a crawler or an engineer.
 
-| The shoved unit hits | Result |
+Both resolve through `Board::push`, the pull as a push toward the engineer:
+
+| The pushed or pulled unit hits | Result |
 |---|---|
 | Open ground | It moves. An engineer that lands on water drowns. |
 | The board edge | It takes 1 damage and stays put. |
 | Another unit | Each takes 1 damage. Neither moves. |
 | A building | The unit and the building each take 1 damage. The unit stays put. |
 
+For a pull, "hits" means the tile between: if a unit or a building stands there,
+the pull is blocked and bumps, exactly like a shove into it. An engineer pulled
+onto water drowns. A pull never reaches past two tiles and never pulls a unit
+onto the engineer itself.
+
 **End turn** is legal at any point in the player phase. Engineers that have not
 acted simply forgo their action.
+
+Why the harpoon pull (#73): three third tools were prototyped and measured with
+the solver: the pull, a sandbag (a one-turn obstacle) and a brace (a cottage
+ignores the next strike).
+
+- **Brace** let 971 of 1000 missions be won with no push at all, which breaks
+  pillar 2.
+- **Sandbag** doubled the branching where it matters: only 715 missions were
+  provable at the proof budget.
+- **The pull** is the only one that moves something. It raised the proven rate
+  from 975 to 989, appeared in 99% of winning lines alongside the shove, and
+  made proofs cheaper (median 3.8k nodes against 15.8k).
+
+The pull also makes optimal play easier. Passive play is untouched: no tool is
+used by standing still or retreating.
 
 Why move-then-shove rather than move *or* shove: crawlers move after the
 player, so an engineer almost never starts its turn adjacent to one. With move
@@ -167,12 +191,12 @@ that is replayed in-process, so it is a certificate. "Unwinnable" comes only
 from a complete search. "Unproven" means the budget ran out and says nothing
 either way.
 
-- **With shoves, at the proof budget** (`kProofBudget`, 2M nodes): the share
-  of missions that can be offered.
-- **Without shoves, at 10M nodes**
+- **With shoves and pulls, at the proof budget** (`kProofBudget`, 2M nodes):
+  the share of missions that can be offered.
+- **Without any push, at 10M nodes**: no shove and no pull
   (`bw_solve --range 0-999 --no-shove --budget 10000000`, about 15 minutes on
   16 cores):
-  - the winnable count is a **lower bound** on missions that need no shove;
+  - the winnable count is a **lower bound** on missions that need no push;
   - the unwinnable count is a lower bound on missions that **need** one;
   - the true share lies between the two.
 
@@ -183,12 +207,13 @@ bound never establishes an upper limit (#96).
 
 ### Results
 
-| Rules | With shoves | **No** shoves, 10M | Retreat policy | Idle |
+| Rules | With pushes | **No** pushes, 10M | Retreat policy | Idle |
 |---|---|---|---|---|
 | Bootstrap: crawlers prefer engineers, strike 1, reach 2 | 1000 / 1000 (1M) | 1000 winnable (1M) | 841 won | 0 |
 | #39: crawlers prefer buildings, strike 2, reach 3 | 993 (1M) | ≥ 464 winnable (1M only) | 10 won | 0 |
 | #71: crawlers march on the town, no luring | 981 (1M) | **≥ 559 winnable**, 50 unwinnable, 391 unproven | 10 won | 0 |
 | **#96: the town falls when two of its three cottages are razed** | **975** (2M) | **≥ 121 winnable**, **383 unwinnable**, 496 unproven | **0** won | 0 |
+| **#73: the harpoon pull** | **990** (2M) | unchanged from #96: the sweep allows neither shoves nor pulls | 0 won | 0 |
 
 Under #96, a random sample of 48 of the 496 unproven seeds was re-run at 50M
 nodes: 38 came out unwinnable, 7 winnable and 3 still unproven. Scaled up, that
@@ -283,9 +308,10 @@ no randomness, so the id goes to `Spawns`, and `Deploy` takes 3.
 ## Solver cost
 
 Per engineer per turn there are at most 13 destinations (staying, 4 one-step
-tiles, 8 two-step tiles), and each can be followed by one of at most 4 shoves or
-by none: 65 options. Three engineers in any order give at most 65³ × 3! ≈ 1.6
-million action sequences per turn. Many of them reach the same position.
+tiles, 8 two-step tiles). Each can be followed by one of at most 4 shoves, one
+of at most 4 pulls, or nothing: 117 options. Three engineers in any order give
+at most 117³ × 3! ≈ 9.6 million action sequences per turn. In practice only a
+few shoves and pulls have a target, and many sequences reach the same position.
 
 That is too many to enumerate over five turns. It does not have to be
 enumerated. Proving a mission survivable means finding **one** winning line,

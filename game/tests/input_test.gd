@@ -41,10 +41,10 @@ func _run() -> void:
 	await _check_strike_hover()
 	await _check_enemy_phase()
 	await _check_hints()
-	_main.restart(162)
-	_check(_main.mission.get_seed() == 163, "a rejected seed is never played: 162 starts mission 163")
+	_main.restart(289)
+	_check(_main.mission.get_seed() == 290, "a rejected seed is never played: 289 starts mission 290")
 	await _key(KEY_N)
-	_check(_main.mission.get_seed() == 164, "N moves to the next offered seed")
+	_check(_main.mission.get_seed() == 291, "N moves to the next offered seed")
 	for s in str(args.get("seeds", "20")).split(","):
 		await _play_by_clicks(int(s))
 	for path in str(args.get("play-logs", "")).split(",", false):
@@ -288,18 +288,33 @@ func _play_log_by_input(path: String) -> void:
 	var mission: BreakwaterMission = _main.mission
 	var keys := [KEY_W, KEY_D, KEY_S, KEY_A]
 	var entered := 0
+	var pulls := {"click": 0, "key": 0}
 	for c in parsed["commands"]:
 		var before := mission.get_log()
 		match c["verb"]:
-			"move", "shove":
+			"move", "shove", "pull":
 				var e: Dictionary = mission.get_units()[c["engineer"]]
 				var at := Vector2i(e["x"], e["y"])
 				if _main.input.selected != int(c["engineer"]):
 					await _click(at)
 				if c["verb"] == "move":
 					await _click(Vector2i(c["x"], c["y"]))
-				else:
+				elif c["verb"] == "shove":
 					await _key(keys[int(c["dir"])])
+				else:
+					# A pull: preview it by hovering, then click a crawler or
+					# Shift+key an engineer (a plain click would select it).
+					var target: Vector2i = at + DIRS[int(c["dir"])] * 2
+					_main.input.hover(target)
+					_check(
+						_main.input.preview.shown.begins_with("pull"), "hovering pull target %s previews it" % target
+					)
+					if _has_engineer(target):
+						await _key(keys[int(c["dir"])], true)
+						pulls["key"] += 1
+					else:
+						await _click(target)
+						pulls["click"] += 1
 			_:
 				await _key(KEY_SPACE)
 		if mission.get_log() == before:
@@ -309,7 +324,13 @@ func _play_log_by_input(path: String) -> void:
 	var outcome: String = {BreakwaterMission.OUTCOME_WON: "won", BreakwaterMission.OUTCOME_LOST: "lost"}.get(
 		mission.get_outcome(), "in-progress"
 	)
-	_check(entered == parsed["commands"].size(), "%s: all %d commands entered by input" % [path, entered])
+	_check(
+		entered == parsed["commands"].size(),
+		(
+			"%s: all %d commands entered by input (pulls: %d by click, %d by Shift+key)"
+			% [path, entered, pulls["click"], pulls["key"]]
+		)
+	)
 	var saved: String = _main.save_log()
 	print(
 		(
@@ -359,14 +380,22 @@ func _click(c: Vector2i) -> void:
 	await _settle()
 
 
-func _key(keycode: Key) -> void:
+func _key(keycode: Key, shift := false) -> void:
 	for pressed in [true, false]:
 		var event := InputEventKey.new()
 		event.keycode = keycode
+		event.shift_pressed = shift
 		event.pressed = pressed
 		Input.parse_input_event(event)
 		await _frames(1)
 	await _settle()
+
+
+func _has_engineer(c: Vector2i) -> bool:
+	for u in _main.mission.get_units():
+		if u["alive"] and u["engineer"] and Vector2i(u["x"], u["y"]) == c:
+			return true
+	return false
 
 
 func _has_unit(c: Vector2i) -> bool:

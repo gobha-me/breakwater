@@ -24,8 +24,9 @@ tools/export.sh          # standalone Linux release build in build/export/
 tools/play.sh --exported # play the exported build
 ```
 
-Mouse: click an engineer, then a green tile to move or an orange unit to shove
-(hover it first to preview the outcome). Keys: WASD shove, Space end turn,
+Mouse: click an engineer, then a green tile to move, an orange unit to shove,
+or a teal unit two tiles away to harpoon it one tile closer (hover first to
+preview the outcome). Keys: WASD shove, Shift+WASD pull, Space end turn,
 Z undo a move, Tab next engineer, R restart, N next mission, F5 save a replay.
 
 ## Build

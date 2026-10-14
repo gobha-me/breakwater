@@ -12,7 +12,7 @@ parentheses say which criterion a phase closes.
 | 1 Core loop | Done (#15, #17, #18, #23) | 2: rules only in `core/` |
 | 2 Replay | Done (#24, #31, #32) | 3: `tools/replay_check.sh`, 12/12 identical |
 | 3 Playable | Done (#35, #40, #41, #46); captures in `docs/captures/` | 1: playable by input; 6: golden gate in place |
-| 4 Solver | Done (#36, #42); proof budget 2M since #96 | 4: `tools/seeds_check.sh`, 975 proven, 25 rejected |
+| 4 Solver | Done (#36, #42); proof budget 2M since #96 | 4: `tools/seeds_check.sh`, 990 proven, 10 rejected |
 | 5 Assets | Done (#49): four Meshy assets, look A, provenance in `assets/PROVENANCE.md` | 5; 6: golden re-recorded |
 
 All six concept criteria are met and gated by `tools/check.sh`. Open for the
@@ -20,7 +20,8 @@ owner: review of the look and confirmation of the Meshy licence (#49).
 
 Revised since the plan: crawlers now go for the town, strike for 2 and move 3
 (#19, #39), and march on it rather than chase engineers (#71). The town falls
-when two of its three cottages are razed (#96). The solver showed the original
+when two of its three cottages are razed (#96). Engineers carry a harpoon that
+pulls a unit two tiles away one tile closer (#73). The solver showed the original
 rules never needed a shove, and a 10M-node sweep showed #71's still mostly
 didn't: at least 559 of 1000 missions were winnable without one. Under #96 at
 least 383 provably need one. The method and numbers are in `RULES.md`,

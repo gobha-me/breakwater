@@ -112,6 +112,20 @@ template <typename T> [[nodiscard]] std::optional<T> number(std::string_view tok
         }
         return ShoveCommand{.engineer = *engineer, .dir = *dir};
     }
+    if (verb == "pull") {
+        if (t.size() != 3) {
+            return std::unexpected{"'pull' takes an engineer and a direction"};
+        }
+        const auto engineer = number<UnitId>(t[1]);
+        if (!engineer) {
+            return std::unexpected{"'pull' engineer must be an integer in range"};
+        }
+        const auto dir = direction(t[2]);
+        if (!dir) {
+            return std::unexpected{"'pull' direction must be N, E, S or W"};
+        }
+        return PullCommand{.engineer = *engineer, .dir = *dir};
+    }
     return std::unexpected{"unknown command '" + std::string{verb} + "'"};
 }
 
@@ -189,6 +203,8 @@ std::string write_log(const MissionLog& log) {
                    std::to_string(move->to.y) + '\n';
         } else if (const auto* shove = std::get_if<ShoveCommand>(&command)) {
             out += "shove " + std::to_string(shove->engineer) + ' ' + direction_letter(shove->dir) + '\n';
+        } else if (const auto* pull = std::get_if<PullCommand>(&command)) {
+            out += "pull " + std::to_string(pull->engineer) + ' ' + direction_letter(pull->dir) + '\n';
         } else {
             out += "end\n";
         }

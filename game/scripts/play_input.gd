@@ -7,8 +7,11 @@ extends Node3D
 ##   Click an engineer      select it
 ##   Click a green tile     move there
 ##   Click an orange unit   shove it away (Shift-click to shove an engineer)
+##   Click a teal unit      harpoon it: pull it one tile closer (Shift-click
+##                          for an engineer)
 ##   WASD / arrows          shove the unit north / west / south / east of the
 ##                          selected engineer, even one hidden behind another
+##   Shift+WASD / arrows    pull the unit two tiles away in that direction
 ##   Space                  end the turn; during playback, skip to its end
 ##   Tab / Esc              next engineer / deselect
 ##   Z                      undo the last move (until a shove or end of turn)
@@ -25,6 +28,7 @@ const Hud := preload("res://scripts/hud.gd")
 const DIRS := [Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0)]
 const MOVE_COLOR := Color(0.3, 0.95, 0.4, 0.45)
 const SHOVE_COLOR := Color(1.0, 0.6, 0.1, 0.6)
+const PULL_COLOR := Color(0.2, 0.85, 1.0, 0.6)
 const SELECT_COLOR := Color(1.0, 0.95, 0.3, 0.7)
 const PreviewView := preload("res://scripts/preview_view.gd")
 
@@ -44,8 +48,9 @@ func setup(owner_scene: Node3D) -> void:
 	preview.setup(main.board)
 
 
-## Previews the shove a click on `c` would make, if it would make one; clears
-## the preview otherwise. Hover and the input test both come through here.
+## Previews the shove or pull a click on `c` would make, if it would make one;
+## clears the preview otherwise. Hover and the input test both come through
+## here.
 func hover(c: Vector2i, crawler := -2) -> void:
 	# Hovering a crawler highlights its own strike. `crawler` is the first
 	# crawler along the mouse ray (see _crawler_under), which finds one even
@@ -54,15 +59,16 @@ func hover(c: Vector2i, crawler := -2) -> void:
 	if crawler == -2:
 		crawler = int(under["id"]) if not under.is_empty() and not under["engineer"] else -1
 	main.units.highlight_strike(crawler)
-	if not _accepting() or selected < 0 or under.is_empty() or not _is_adjacent(c):
+	if not _accepting() or selected < 0 or under.is_empty() or not (_is_adjacent(c) or _is_pull_target(c)):
 		preview.clear()
 		return
-	var dir := DIRS.find(c - _selected_pos())
 	var mission: BreakwaterMission = main.mission
+	var pulling := _is_pull_target(c)
+	var dir := _pull_dir(c) if pulling else DIRS.find(c - _selected_pos())
 	preview.show_preview(
-		"%d:%d:%s" % [selected, dir, mission.get_state_hash_hex()],
+		"%s:%d:%d:%s" % ["pull" if pulling else "shove", selected, dir, mission.get_state_hash_hex()],
 		mission.get_units(),
-		mission.preview_shove(selected, dir),
+		mission.preview_pull(selected, dir) if pulling else mission.preview_shove(selected, dir),
 		mission.get_unit_max_hp()
 	)
 
@@ -84,7 +90,8 @@ func pick_for_click(screen: Vector2) -> Vector2i:
 		var c: Vector2i = hit["tile"]
 		if selected >= 0 and hit["unit"]:
 			var u := _unit_at(c)
-			if c == _selected_pos() or (not u.is_empty() and not u["engineer"] and not _is_adjacent(c)):
+			var target := _is_adjacent(c) or _is_pull_target(c)
+			if c == _selected_pos() or (not u.is_empty() and not u["engineer"] and not target):
 				continue
 		return c
 	return Vector2i(-1, -1)
@@ -132,14 +139,14 @@ func _hits(screen: Vector2) -> Array[Dictionary]:
 
 
 ## What a click on tile `c` does, given the current selection. `force_shove`
-## is Shift: shove even an engineer instead of selecting it.
+## is Shift: shove or pull even an engineer instead of selecting it.
 func click(c: Vector2i, force_shove := false) -> void:
 	if not _accepting():
 		return
 	var mission: BreakwaterMission = main.mission
 	var at := _unit_at(c)
 	var engineer_here: bool = not at.is_empty() and at["engineer"]
-	if engineer_here and not (force_shove and _is_adjacent(c)):
+	if engineer_here and not (force_shove and (_is_adjacent(c) or _is_pull_target(c))):
 		_select(int(at["id"]))
 		return
 	if selected < 0:
@@ -148,6 +155,8 @@ func click(c: Vector2i, force_shove := false) -> void:
 		_apply("move", mission.move(selected, c.x, c.y))
 	elif not at.is_empty() and _is_adjacent(c):
 		_apply("shove", mission.shove(selected, DIRS.find(c - _selected_pos())))
+	elif not at.is_empty() and _is_pull_target(c):
+		_apply("pull", mission.pull(selected, _pull_dir(c)))
 	else:
 		main.hud.say("Engineer %d can't reach that tile." % (selected + 1))
 
@@ -161,6 +170,17 @@ func shove_toward(dir: int) -> void:
 		main.hud.say("Nothing to shove there.")
 		return
 	_apply("shove", main.mission.shove(selected, dir))
+
+
+## Pulls whatever stands two tiles from the selected engineer in direction
+## `dir`, even one hidden behind another.
+func pull_toward(dir: int) -> void:
+	if not _accepting() or selected < 0:
+		return
+	if _unit_at(_selected_pos() + DIRS[dir] * 2).is_empty():
+		main.hud.say("Nothing to pull there.")
+		return
+	_apply("pull", main.mission.pull(selected, dir))
 
 
 func end_turn() -> void:
@@ -204,13 +224,13 @@ func _unhandled_input(event: InputEvent) -> void:
 				else:
 					end_turn()
 			KEY_W, KEY_UP:
-				shove_toward(BreakwaterMission.DIR_NORTH)
+				_act_toward(BreakwaterMission.DIR_NORTH, event.shift_pressed)
 			KEY_D, KEY_RIGHT:
-				shove_toward(BreakwaterMission.DIR_EAST)
+				_act_toward(BreakwaterMission.DIR_EAST, event.shift_pressed)
 			KEY_S, KEY_DOWN:
-				shove_toward(BreakwaterMission.DIR_SOUTH)
+				_act_toward(BreakwaterMission.DIR_SOUTH, event.shift_pressed)
 			KEY_A, KEY_LEFT:
-				shove_toward(BreakwaterMission.DIR_WEST)
+				_act_toward(BreakwaterMission.DIR_WEST, event.shift_pressed)
 			KEY_TAB:
 				cycle()
 			KEY_ESCAPE:
@@ -229,6 +249,13 @@ func _unhandled_input(event: InputEvent) -> void:
 				main.next_mission()
 			KEY_F5:
 				main.save_log()
+
+
+func _act_toward(dir: int, pull: bool) -> void:
+	if pull:
+		pull_toward(dir)
+	else:
+		shove_toward(dir)
 
 
 func _accepting() -> bool:
@@ -278,6 +305,22 @@ func _is_adjacent(c: Vector2i) -> bool:
 	return selected >= 0 and (c - _selected_pos()) in DIRS
 
 
+## A unit two tiles from the selected engineer in a straight line: what its
+## harpoon reaches.
+func _is_pull_target(c: Vector2i) -> bool:
+	return selected >= 0 and _pull_dir(c) >= 0 and not _unit_at(c).is_empty()
+
+
+## The direction from the selected engineer to `c` when `c` is two tiles away
+## in a line, or −1.
+func _pull_dir(c: Vector2i) -> int:
+	var delta := c - _selected_pos()
+	for i in DIRS.size():
+		if delta == DIRS[i] * 2:
+			return i
+	return -1
+
+
 func _draw_marks() -> void:
 	for child in _marks.get_children():
 		child.queue_free()
@@ -293,6 +336,9 @@ func _draw_marks() -> void:
 		var target: Vector2i = here + d
 		if not _unit_at(target).is_empty():
 			_marks.add_child(_quad(board.top_of(target), SHOVE_COLOR, 0.85))
+		var far: Vector2i = here + d * 2
+		if not _unit_at(far).is_empty():
+			_marks.add_child(_quad(board.top_of(far), PULL_COLOR, 0.85))
 
 
 func _quad(top: Vector3, color: Color, size: float) -> MeshInstance3D:

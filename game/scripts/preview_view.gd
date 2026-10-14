@@ -42,12 +42,12 @@ func show_preview(key: String, now: Array, preview: Dictionary, unit_max_hp: int
 		if to != from:
 			add_child(_path(from, to))
 		var lost := int(b["hp"]) - int(a["hp"])
-		if not a["alive"]:
+		if not a["alive"] and b["alive"]:  # Only what this action kills.
 			var drowned := false
 			for e in preview["events"]:
 				drowned = drowned or (int(e["kind"]) == BreakwaterMission.EVENT_UNIT_DROWNED and int(e["unit"]) == i)
 			add_child(_label(_board.top_of(to), "drowns" if drowned else "✕", HARM))
-		elif lost > 0 or to != from:
+		elif a["alive"] and (lost > 0 or to != from):
 			var ring := HealthRing.new()
 			ring.setup(unit_max_hp, 0.33, 0.46, HARM if lost > 0 else GHOST)
 			ring.show_hp(int(a["hp"]))

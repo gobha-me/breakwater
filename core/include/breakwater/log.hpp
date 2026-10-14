@@ -17,6 +17,7 @@ namespace breakwater {
 ///     seed 20
 ///     move 0 2 6
 ///     shove 1 N
+///     pull 2 E
 ///     end
 ///
 /// `#` starts a comment; blank lines are ignored. Parsing is strict: anything

@@ -20,6 +20,7 @@ using breakwater::Intent;
 using breakwater::kBoardSize;
 using breakwater::Mission;
 using breakwater::MoveCommand;
+using breakwater::PullCommand;
 using breakwater::Rejection;
 using breakwater::ShoveCommand;
 using breakwater::Tile;
@@ -220,6 +221,97 @@ TEST_CASE("a shove resolves through Board::push and reports each effect", "[miss
               });
         require_refused(mission, MoveCommand{.engineer = other, .to = {2, 0}}, Rejection::UnitDead);
         require_refused(mission, ShoveCommand{.engineer = other, .dir = Direction::South}, Rejection::UnitDead);
+    }
+}
+
+TEST_CASE("a harpoon pull draws the unit two tiles away one tile closer", "[mission][pull]") {
+    Board board = flat_board();
+    const auto e = board.add_unit(UnitKind::Engineer, {3, 4}, 2);
+
+    SECTION("onto open ground: it moves to the tile between, unhurt") {
+        const auto c = board.add_unit(UnitKind::Crawler, {3, 2}, 2);
+        Mission mission = scenario(board);
+        REQUIRE(mission.apply(PullCommand{.engineer = e, .dir = Direction::North}));
+        CHECK(mission.board().unit(c).pos == Coord{3, 3});
+        CHECK(mission.board().unit(c).hp == 2);
+        CHECK(mission.take_events() ==
+              std::vector<Event>{{.kind = EventKind::UnitShoved, .unit = c, .from = {3, 2}, .to = {3, 3}}});
+        CHECK(mission.action_state(e) == ActionState::Done);
+    }
+
+    SECTION("a unit between blocks it: both take a bump, neither moves") {
+        const auto far = board.add_unit(UnitKind::Crawler, {5, 4}, 2);
+        const auto near = board.add_unit(UnitKind::Crawler, {4, 4}, 2);
+        Mission mission = scenario(board);
+        REQUIRE(mission.apply(PullCommand{.engineer = e, .dir = Direction::East}));
+        CHECK(mission.board().unit(far).pos == Coord{5, 4});
+        CHECK(mission.board().unit(far).hp == 1);
+        CHECK(mission.board().unit(near).hp == 1);
+    }
+
+    SECTION("a building between blocks it: the unit and the building take a bump") {
+        const auto c = board.add_unit(UnitKind::Crawler, {1, 4}, 2);
+        add_building(board, {2, 4}, 2);
+        Mission mission = scenario(board);
+        REQUIRE(mission.apply(PullCommand{.engineer = e, .dir = Direction::West}));
+        CHECK(mission.board().unit(c).pos == Coord{1, 4});
+        CHECK(mission.board().unit(c).hp == 1);
+        CHECK(mission.board().tile({2, 4}).building_hp == 1);
+    }
+
+    SECTION("an engineer pulled onto water drowns; a crawler swims") {
+        const auto other = board.add_unit(UnitKind::Engineer, {3, 6}, 2);
+        add_water(board, {3, 5});
+        Mission mission = scenario(board);
+        REQUIRE(mission.apply(PullCommand{.engineer = e, .dir = Direction::South}));
+        CHECK_FALSE(mission.board().unit(other).alive());
+
+        Board wet = flat_board();
+        const auto puller = wet.add_unit(UnitKind::Engineer, {3, 4}, 2);
+        const auto c = wet.add_unit(UnitKind::Crawler, {3, 6}, 2);
+        (void)wet.add_unit(UnitKind::Engineer, {0, 0}, 2);
+        add_water(wet, {3, 5});
+        Mission swim = scenario(wet);
+        REQUIRE(swim.apply(PullCommand{.engineer = puller, .dir = Direction::South}));
+        CHECK(swim.board().unit(c).pos == Coord{3, 5});
+        CHECK(swim.board().unit(c).hp == 2);
+    }
+
+    SECTION("after a move, from where the engineer now stands") {
+        const auto c = board.add_unit(UnitKind::Crawler, {5, 3}, 2);
+        Mission mission = scenario(board);
+        REQUIRE(mission.apply(MoveCommand{.engineer = e, .to = {3, 3}}));
+        REQUIRE(mission.apply(PullCommand{.engineer = e, .dir = Direction::East}));
+        CHECK(mission.board().unit(c).pos == Coord{4, 3});
+    }
+
+    SECTION("refused: nothing two tiles away, off the board, an adjacent unit, or already acted") {
+        (void)board.add_unit(UnitKind::Crawler, {3, 3}, 2); // Adjacent: a shove's target, not a pull's.
+        (void)board.add_unit(UnitKind::Crawler, {5, 4}, 2);
+        Mission mission = scenario(board);
+        require_refused(mission, PullCommand{.engineer = e, .dir = Direction::North}, Rejection::NothingToPull);
+        require_refused(mission, PullCommand{.engineer = e, .dir = Direction::West}, Rejection::NothingToPull);
+        REQUIRE(mission.apply(MoveCommand{.engineer = e, .to = {3, 6}}));
+        (void)mission.take_events();
+        require_refused(mission, PullCommand{.engineer = e, .dir = Direction::South}, Rejection::NothingToPull);
+        require_refused(mission, ShoveCommand{.engineer = e, .dir = Direction::North}, Rejection::NothingToShove);
+        Mission fresh = scenario(board);
+        REQUIRE(fresh.apply(PullCommand{.engineer = e, .dir = Direction::East}));
+        (void)fresh.take_events();
+        require_refused(fresh, PullCommand{.engineer = e, .dir = Direction::East}, Rejection::AlreadyActed);
+        require_refused(fresh, ShoveCommand{.engineer = e, .dir = Direction::North}, Rejection::AlreadyActed);
+        require_refused(fresh, PullCommand{.engineer = 99, .dir = Direction::East}, Rejection::NotAnEngineer);
+    }
+
+    SECTION("pulling a dead unit is refused: there is nothing there") {
+        const auto c = board.add_unit(UnitKind::Crawler, {3, 0}, 1);
+        const auto pusher = board.add_unit(UnitKind::Engineer, {3, 1}, 2);
+        Mission mission = scenario(board);
+        REQUIRE(mission.apply(ShoveCommand{.engineer = pusher, .dir = Direction::North}));
+        REQUIRE_FALSE(mission.board().unit(c).alive());
+        REQUIRE(mission.apply(MoveCommand{.engineer = e, .to = {3, 2}}));
+        (void)mission.take_events();
+        require_refused(mission, PullCommand{.engineer = e, .dir = Direction::North}, Rejection::NothingToPull);
     }
 }
 

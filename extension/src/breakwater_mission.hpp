@@ -77,13 +77,16 @@ public:
     /// events and units shaped as take_events() and get_units() return them.
     /// The core's own preview, so it is the outcome, not an estimate.
     [[nodiscard]] godot::Dictionary preview_shove(int64_t engineer, int64_t dir) const;
+    /// The same for a harpoon pull.
+    [[nodiscard]] godot::Dictionary preview_pull(int64_t engineer, int64_t dir) const;
 
     godot::String move(int64_t engineer, int64_t x, int64_t y);
     godot::String shove(int64_t engineer, int64_t dir);
+    godot::String pull(int64_t engineer, int64_t dir);
     godot::String end_turn();
     /// Takes back the most recent move, restoring the exact prior state and
-    /// dropping it from the log. Moves stack until a shove or the end of the
-    /// turn, which are final. Returns "" or why nothing was undone.
+    /// dropping it from the log. Moves stack until a shove, a pull or the end
+    /// of the turn, which are final. Returns "" or why nothing was undone.
     godot::String undo();
     [[nodiscard]] bool can_undo() const;
 
@@ -124,6 +127,10 @@ protected:
     static void _bind_methods();
 
 private:
+    /// preview_shove() and preview_pull(): `command` already built from
+    /// checked arguments.
+    [[nodiscard]] godot::Dictionary preview_command(const Command& command) const;
+
     godot::String apply(const Command& command);
     [[nodiscard]] static godot::Array units_of(const Mission& mission);
     [[nodiscard]] static godot::Array events_of(const std::vector<Event>& events);

@@ -202,8 +202,8 @@ func update_hints() -> void:
 
 ## Called by the input after the mission accepts a player command.
 func note_command(verb: String) -> void:
-	_acted = _acted or verb in ["move", "shove"]
-	_shoved = _shoved or verb == "shove"
+	_acted = _acted or verb in ["move", "shove", "pull"]
+	_shoved = _shoved or verb in ["shove", "pull"]
 	_ended = _ended or verb == "end"
 
 
@@ -303,6 +303,8 @@ func _load_until(path: String, turns: int) -> void:
 				mission.move(c["engineer"], c["x"], c["y"])
 			"shove":
 				mission.shove(c["engineer"], c["dir"])
+			"pull":
+				mission.pull(c["engineer"], c["dir"])
 			_:
 				mission.end_turn()
 				ended += 1
@@ -326,10 +328,12 @@ func _autoplay(path: String, pace: float, hold: float) -> void:
 		index += 1
 		if pace > 0.0 and c["verb"] != "end":
 			# Show what a player would see before acting: the selection, and
-			# for a shove the preview of its outcome.
+			# for a shove or a pull the preview of its outcome.
 			input.click(_engineer_tile(int(c["engineer"])))
 			if c["verb"] == "shove":
 				input.hover(_engineer_tile(int(c["engineer"])) + input.DIRS[int(c["dir"])])
+			elif c["verb"] == "pull":
+				input.hover(_engineer_tile(int(c["engineer"])) + input.DIRS[int(c["dir"])] * 2)
 			await _wait(pace)
 		var err: String
 		match c["verb"]:
@@ -337,6 +341,8 @@ func _autoplay(path: String, pace: float, hold: float) -> void:
 				err = mission.move(c["engineer"], c["x"], c["y"])
 			"shove":
 				err = mission.shove(c["engineer"], c["dir"])
+			"pull":
+				err = mission.pull(c["engineer"], c["dir"])
 			_:
 				err = mission.end_turn()
 		if not err.is_empty():

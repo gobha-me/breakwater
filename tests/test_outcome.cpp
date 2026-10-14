@@ -139,7 +139,14 @@ Mission scenario(const Board& board, std::vector<Intent> intents = {}) {
 
 } // namespace
 
-TEST_CASE("scripted mission: the solver's witness wins, with shoves", "[outcome][script]") {
+TEST_CASE("scripted mission: the solver's witness wins, with shoves and pulls", "[outcome][script]") {
+    const auto log = breakwater::parse_log(read_file("win-seed20.log"));
+    REQUIRE(log);
+    const auto uses = [&log]<typename T>(T /*kind*/) {
+        return std::ranges::any_of(log->commands, [](const Command& c) { return std::holds_alternative<T>(c); });
+    };
+    CHECK(uses(ShoveCommand{}));
+    CHECK(uses(breakwater::PullCommand{}));
     auto [mission, hashes] = replay("win-seed20.log");
     CHECK(hashes == golden_hashes("win-seed20.hashes"));
     CHECK(mission.outcome() == Outcome::Won);
