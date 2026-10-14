@@ -40,13 +40,30 @@ for log in tests/logs/*.log; do
     fi
 done
 
+# Every committed campaign, played mission by mission through the scene, must
+# reach the score and the ending its .hashes record.
+for log in tests/logs/campaigns/*.log; do
+    [[ -e "$log" ]] || continue
+    score="$(grep '^campaign score ' "${log%.log}.hashes" | cut -d' ' -f3)"
+    ending="$(grep -E '^campaign (finished|unfinished)$' "${log%.log}.hashes" | cut -d' ' -f2)"
+    out="$(timeout 300 "$GODOT" --headless --path game -- --autoplay="$PWD/$log" 2>&1)" || true
+    if grep -qE "$problems" <<<"$out"; then
+        echo "  FAIL autoplay $log: errors or leaks"; grep -E "$problems" <<<"$out" | head -5; status=1
+    elif grep -qE "^autoplay: campaign [0-9]+, [0-9]+ missions, score $score, $ending$" <<<"$out"; then
+        echo "  ok   autoplay $log: score $score, $ending"
+    else
+        echo "  FAIL autoplay $log: expected score $score, $ending"; tail -3 <<<"$out"; status=1
+    fi
+done
+
 # Input: play whole missions with injected mouse clicks and keys, save each
 # game the way F5 does, and require bw_replay to reach the hash the game showed.
 replay="build/dev/tools/replay/bw_replay"
 mkdir -p build && played="$(mktemp -d "$PWD/build/played.XXXXXX")"
 trap 'rm -rf "$played"' EXIT
 out="$(timeout 300 "$GODOT" --headless --path game --script res://tests/input_test.gd -- \
-    --save-dir="$played" --seeds=20,19 --play-logs="$PWD/tests/logs/win-seed20.log" --no-hints 2>&1)" || status=1
+    --save-dir="$played" --seeds=20,19 --play-logs="$PWD/tests/logs/win-seed20.log" \
+    --play-campaign="$PWD/tests/logs/campaigns/campaign-0.log" --no-hints 2>&1)" || status=1
 grep -E '^  (ok|FAIL)|^input:' <<<"$out" || true
 if grep -qE "$problems" <<<"$out" || ! grep -q '^input: PASS' <<<"$out"; then
     echo "  FAIL input test did not pass:"; grep -E "$problems|FAIL" <<<"$out" | head -5; status=1
@@ -61,4 +78,14 @@ while read -r line; do
         echo "  FAIL saved game $log: game showed $shown, bw_replay reached $replayed"; status=1
     fi
 done < <(grep '^played:' <<<"$out")
+while read -r line; do
+    shown="$(sed -E 's/.*score ([0-9]+),.*/\1/' <<<"$line")"
+    log="$(sed -E 's/.*log (.*)$/\1/' <<<"$line")"
+    replayed="$("$replay" "$log" | grep '^campaign score ' | cut -d' ' -f3)"
+    if [[ "$shown" == "$replayed" ]]; then
+        echo "  ok   saved campaign replays to the score shown: ${line%%, log*}"
+    else
+        echo "  FAIL saved campaign $log: game showed $shown, bw_replay scored $replayed"; status=1
+    fi
+done < <(grep '^played-campaign:' <<<"$out")
 exit $status

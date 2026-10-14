@@ -10,7 +10,8 @@ extends SceneTree
 ##      engineer, click the tile or press WASD to shove, Space to end the turn.
 ##
 ##   godot --headless --path game --script res://tests/input_test.gd -- \
-##       --save-dir=<dir> --seeds=19,20 --play-logs=/abs/win.log
+##       --save-dir=<dir> --seeds=19,20 --play-logs=/abs/win.log \
+##       --play-campaign=/abs/campaign.log
 
 const DIRS := [Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0)]
 
@@ -50,6 +51,8 @@ func _run() -> void:
 		await _play_by_clicks(int(s))
 	for path in str(args.get("play-logs", "")).split(",", false):
 		await _play_log_by_input(path)
+	if args.has("play-campaign"):
+		await _play_campaign_by_input(args["play-campaign"])
 	print("input: %s (%d failure(s))" % ["PASS" if _failures == 0 else "FAIL", _failures])
 	quit(1 if _failures > 0 else 0)
 
@@ -342,11 +345,72 @@ func _play_log_by_input(path: String) -> void:
 	_check(parsed["error"].is_empty(), "%s parses" % path)
 	_main.restart(parsed["seed"])
 	await _frames(2)
+	var pulls := {"click": 0, "key": 0}
+	var entered: int = await _enter_by_input(parsed["commands"], path, pulls)
+	if entered < 0:
+		return
+	var mission: BreakwaterMission = _main.mission
+	var outcome: String = {BreakwaterMission.OUTCOME_WON: "won", BreakwaterMission.OUTCOME_LOST: "lost"}.get(
+		mission.get_outcome(), "in-progress"
+	)
+	_check(
+		entered == parsed["commands"].size(),
+		(
+			"%s: all %d commands entered by input (pulls: %d by click, %d by Shift+key)"
+			% [path, entered, pulls["click"], pulls["key"]]
+		)
+	)
+	var saved: String = _main.save_log()
+	print(
+		(
+			"played: seed %d, %s, %d commands by input, hash %s, log %s"
+			% [mission.get_seed(), outcome, entered, mission.get_state_hash_hex(), saved]
+		)
+	)
+
+
+## Starts a campaign with C and plays its first two missions from a campaign
+## log by input, moving on with N, then saves it with F5 for the smoke script
+## to replay. Checks the campaign's rules as the player meets them.
+func _play_campaign_by_input(path: String) -> void:
+	var run := BreakwaterMission.parse_campaign_log(FileAccess.get_file_as_string(path))
+	_check(run["error"].is_empty(), "%s parses" % path)
+	var k := int(run["campaign"])
+	var seeds := BreakwaterMission.campaign_seeds(k)
+	_main.restart(seeds[0])
+	await _frames(2)
+	await _key(KEY_C)
+	_check(_main.campaign.active() and _main.campaign.number == k, "C starts campaign %d" % k)
+	_check(_main.hud._campaign.visible, "the HUD shows the campaign: %s" % _main.hud._campaign.text)
+	await _key(KEY_N)
+	_check(_main.mission.get_seed() == seeds[0], "N does nothing until the mission is over")
+	var played := 0
+	for m in run["missions"].slice(0, 2):
+		if played > 0:
+			await _key(KEY_N)
+		_check(_main.mission.get_seed() == int(m["seed"]), "campaign mission %d is seed %d" % [played + 1, m["seed"]])
+		if await _enter_by_input(m["commands"], "%s mission %d" % [path, played + 1], {"click": 0, "key": 0}) < 0:
+			return
+		_check(
+			_main.mission.get_outcome() == BreakwaterMission.OUTCOME_WON,
+			"campaign mission %d won by input, score %d" % [played + 1, _main.mission.get_score()]
+		)
+		played += 1
+	var score: int = _main.campaign.score(_main.mission)
+	var saved: String = _main.save_log()
+	print("played-campaign: campaign %d, %d missions by input, score %d, log %s" % [k, played, score, saved])
+	await _key(KEY_C, true)
+	_check(not _main.campaign.active(), "Shift+C leaves the campaign")
+
+
+## Enters `commands` as clicks and keys: click the engineer, click the tile or
+## press WASD to shove, hover then click or Shift+key to pull, Space to end
+## the turn. Returns how many were entered, or -1 after a failed check.
+func _enter_by_input(commands: Array, label: String, pulls: Dictionary) -> int:
 	var mission: BreakwaterMission = _main.mission
 	var keys := [KEY_W, KEY_D, KEY_S, KEY_A]
 	var entered := 0
-	var pulls := {"click": 0, "key": 0}
-	for c in parsed["commands"]:
+	for c in commands:
 		var before := mission.get_log()
 		match c["verb"]:
 			"move", "shove", "pull":
@@ -375,26 +439,10 @@ func _play_log_by_input(path: String) -> void:
 			_:
 				await _key(KEY_SPACE)
 		if mission.get_log() == before:
-			_check(false, "%s: command %d was not entered by input (%s)" % [path, entered + 1, c])
-			return
+			_check(false, "%s: command %d was not entered by input (%s)" % [label, entered + 1, c])
+			return -1
 		entered += 1
-	var outcome: String = {BreakwaterMission.OUTCOME_WON: "won", BreakwaterMission.OUTCOME_LOST: "lost"}.get(
-		mission.get_outcome(), "in-progress"
-	)
-	_check(
-		entered == parsed["commands"].size(),
-		(
-			"%s: all %d commands entered by input (pulls: %d by click, %d by Shift+key)"
-			% [path, entered, pulls["click"], pulls["key"]]
-		)
-	)
-	var saved: String = _main.save_log()
-	print(
-		(
-			"played: seed %d, %s, %d commands by input, hash %s, log %s"
-			% [mission.get_seed(), outcome, entered, mission.get_state_hash_hex(), saved]
-		)
-	)
+	return entered
 
 
 ## A crawler next to engineer `id` that a shove would push north, toward the

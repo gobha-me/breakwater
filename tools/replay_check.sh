@@ -8,7 +8,7 @@ cd "$(dirname "$0")/.."
 
 presets=("$@")
 [[ ${#presets[@]} -gt 0 ]] || presets=(dev release gcc gcc-release)
-mapfile -t logs < <(find tests/logs -maxdepth 1 -name '*.log' | sort)
+mapfile -t logs < <({ find tests/logs -maxdepth 1 -name '*.log'; find tests/logs/campaigns -name '*.log' 2>/dev/null; } | sort)
 [[ ${#logs[@]} -gt 0 ]] || { echo "replay: no logs in tests/logs" >&2; exit 2; }
 
 failures=0

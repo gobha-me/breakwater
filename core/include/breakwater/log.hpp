@@ -41,4 +41,30 @@ struct LogError {
 /// Canonical text form; parse_log(write_log(log)) == log.
 [[nodiscard]] std::string write_log(const MissionLog& log);
 
+/// A campaign, fully defined: its number and each mission's log, in order.
+/// The text form is a log of logs:
+///
+///     breakwater-campaign 1
+///     campaign 0
+///     mission 0
+///     move 0 2 6
+///     end
+///     mission 1
+///     ...
+///
+/// Each mission's seed must be the campaign's next one (campaign_seeds()).
+struct CampaignLog {
+    std::uint64_t campaign = 0;
+    std::vector<MissionLog> missions;
+
+    friend bool operator==(const CampaignLog&, const CampaignLog&) = default;
+};
+
+inline constexpr int kCampaignLogVersion = 1;
+
+[[nodiscard]] std::expected<CampaignLog, LogError> parse_campaign_log(std::string_view text);
+
+/// Canonical text form; parse_campaign_log(write_campaign_log(log)) == log.
+[[nodiscard]] std::string write_campaign_log(const CampaignLog& log);
+
 } // namespace breakwater

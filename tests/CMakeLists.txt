@@ -9,7 +9,7 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(Catch2)
 
-add_executable(breakwater_tests test_rng.cpp test_board.cpp test_mission.cpp test_intents.cpp test_turn.cpp test_outcome.cpp test_log.cpp test_soak.cpp test_solver.cpp)
+add_executable(breakwater_tests test_rng.cpp test_board.cpp test_mission.cpp test_intents.cpp test_turn.cpp test_outcome.cpp test_log.cpp test_soak.cpp test_solver.cpp test_campaign.cpp)
 target_link_libraries(breakwater_tests PRIVATE breakwater::core breakwater_warnings Catch2::Catch2WithMain)
 target_compile_definitions(breakwater_tests PRIVATE BREAKWATER_LOG_DIR="${CMAKE_CURRENT_SOURCE_DIR}/logs")
 

@@ -1,0 +1,48 @@
+campaign 0
+mission 0
+start 08bb68c520a19df2
+end 1 b81aa4d0883adf7a
+end 2 fd22e41167cc5017
+end 3 ac5438f476072d72
+end 4 1648b1af2f05f440
+end 5 f80cca31673e6ec3
+outcome won
+score 235
+mission 1
+start fa898793f08ce317
+end 1 a56027d761dd7b08
+end 2 a09bb2508481b891
+end 3 50b4c367a2a61c72
+end 4 5869d765d9d1983f
+end 5 fad1f496d1566cee
+outcome won
+score 235
+mission 2
+start 9b1fa35a2907a27e
+end 1 f051e1742f9ffbbf
+end 2 e2d87c7ce24843b4
+end 3 2ede6b680418151b
+end 4 e09727330f4afbeb
+end 5 a23584b26834b6f3
+outcome won
+score 270
+mission 3
+start cb053902453918f7
+end 1 b513a0544e6e603c
+end 2 e6da335fc972c673
+end 3 9a2eed40f6ef27af
+end 4 f57460c9e3ca73fe
+end 5 16bc6ee5f6d60b37
+outcome won
+score 235
+mission 4
+start ea7826b99512a42f
+end 1 23361e3d40970068
+end 2 e5034831a1e2e4b8
+end 3 eb4acb760dce8630
+end 4 f7b5936653e3ad2a
+end 5 703ef7d7dacd1f6f
+outcome won
+score 235
+campaign score 1210
+campaign finished

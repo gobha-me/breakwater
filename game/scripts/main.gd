@@ -28,6 +28,7 @@ const Hud := preload("res://scripts/hud.gd")
 const PlayInput := preload("res://scripts/play_input.gd")
 const Hints := preload("res://scripts/hints.gd")
 const Audio := preload("res://scripts/audio.gd")
+const Campaign := preload("res://scripts/campaign.gd")
 ## Events only an enemy phase produces; a playback containing any is one.
 const ENEMY_PHASE_EVENTS := [
 	BreakwaterMission.EVENT_ATTACK_RESOLVED,
@@ -59,6 +60,7 @@ var hud: Hud
 var input: PlayInput
 var hints: Hints
 var audio: Audio
+var campaign := Campaign.new()
 var playing := false
 var save_dir := "user://logs"
 
@@ -99,6 +101,8 @@ func _ready() -> void:
 	Engine.time_scale = _base_speed
 	if args.has("log"):
 		_load_until(args["log"], int(args.get("after-turn", "-1")))
+	elif args.has("campaign"):
+		start_campaign(int(args["campaign"]))
 	else:
 		restart(int(args.get("seed", str(mission_seed))))
 	if args.has("select"):
@@ -142,6 +146,7 @@ func restart(seed: int) -> void:
 	if playing:
 		return
 	var offered := seed if BreakwaterMission.is_offered(seed) else BreakwaterMission.next_offered(seed)
+	campaign.over = false  # A retry: the campaign log keeps only the last attempt.
 	mission = BreakwaterMission.new()
 	mission.generate(offered)
 	_acted = false
@@ -168,23 +173,60 @@ func undo() -> void:
 	hud.say("Move undone." if err.is_empty() else err[0].to_upper() + err.substr(1) + ".")
 
 
-## The next mission the game offers.
+## The next mission the game offers. In a campaign: the campaign's next
+## mission once this one is won, or the next campaign once this one is over.
 func next_mission() -> void:
-	restart(BreakwaterMission.next_offered(mission.get_seed()))
+	if not campaign.active():
+		restart(BreakwaterMission.next_offered(mission.get_seed()))
+	elif mission.get_outcome() == BreakwaterMission.OUTCOME_IN_PROGRESS:
+		hud.say("Finish this mission first (R restarts it).")
+	elif not campaign.over and campaign.mission_ended(mission):
+		campaign.advance(mission)
+		restart(campaign.seed())
+	elif campaign.number + 1 < BreakwaterMission.get_campaign_count():
+		start_campaign(campaign.number + 1)
+	else:
+		hud.say("That was the last campaign.")
+
+
+## Starts campaign `k` at its first mission.
+func start_campaign(k: int) -> void:
+	if playing:
+		return
+	if not campaign.start(k):
+		hud.say("There is no campaign %d." % k)
+		return
+	restart(campaign.seed())
+	hud.say("Campaign %d: %d missions. Win each to go on; R retries one." % [k, campaign.length()])
+
+
+## Leaves the campaign for free play on the same mission.
+func leave_campaign() -> void:
+	if campaign.active():
+		campaign = Campaign.new()
+		_sync()
+		hud.say("Free play.")
 
 
 ## Writes every accepted command so far as a log bw_replay can replay, and
 ## returns its absolute path ("" on failure).
 func save_log() -> String:
 	DirAccess.make_dir_recursive_absolute(save_dir)
-	var path := save_dir.path_join(
-		"breakwater-seed%d-turn%d-%d.log" % [mission.get_seed(), mission.get_turn(), Time.get_unix_time_from_system()]
-	)
+	var text := mission.get_log()
+	var name := "breakwater-seed%d-turn%d" % [mission.get_seed(), mission.get_turn()]
+	if campaign.active():
+		var made := campaign.log_text(mission)
+		if not made["error"].is_empty():
+			hud.say("Could not save the campaign: %s." % made["error"])
+			return ""
+		text = made["text"]
+		name = "breakwater-campaign%d-mission%d" % [campaign.number, campaign.index + 1]
+	var path := save_dir.path_join("%s-%d.log" % [name, Time.get_unix_time_from_system()])
 	var file := FileAccess.open(path, FileAccess.WRITE)
 	if file == null:
 		hud.say("Could not save %s." % path)
 		return ""
-	file.store_string(mission.get_log())
+	file.store_string(text)
 	file.close()
 	var absolute := ProjectSettings.globalize_path(path)
 	hud.say("Saved %s" % absolute)
@@ -196,8 +238,14 @@ func save_log() -> String:
 func _sync() -> void:
 	board.sync()
 	units.sync(mission)
-	hud.sync(mission)
+	if campaign.active() and mission.get_outcome() != BreakwaterMission.OUTCOME_IN_PROGRESS:
+		campaign.over = not campaign.mission_ended(mission)
+	hud.sync(mission, _campaign_line())
 	update_hints()
+
+
+func _campaign_line() -> String:
+	return campaign.status(mission) if campaign.active() else ""
 
 
 ## Feeds the hints what the player has done so far.
@@ -295,7 +343,7 @@ func _play(e: Dictionary) -> void:
 		BreakwaterMission.EVENT_UNIT_SPAWNED:
 			tween = units.tween_spawn(id, false, to)
 		BreakwaterMission.EVENT_TURN_STARTED, BreakwaterMission.EVENT_MISSION_ENDED:
-			hud.sync(mission)
+			hud.sync(mission, _campaign_line())
 		BreakwaterMission.EVENT_INTENT_DECLARED:
 			pass  # Strikes are drawn by the sync after playback.
 	if tween != null:
@@ -334,7 +382,12 @@ func _load_until(path: String, turns: int) -> void:
 ## Runs a log through the scene exactly as a player's commands would go, so
 ## the presentation is exercised headless. Prints the result and quits.
 func _autoplay(path: String, pace: float, hold: float) -> void:
-	var parsed := BreakwaterMission.parse_log(FileAccess.get_file_as_string(path))
+	var text := FileAccess.get_file_as_string(path)
+	var run := BreakwaterMission.parse_campaign_log(text)
+	if run["error"].is_empty():
+		await _autoplay_campaign(run, pace, hold)
+		return
+	var parsed := BreakwaterMission.parse_log(text)
 	if not parsed["error"].is_empty():
 		printerr("autoplay: %s: %s" % [path, parsed["error"]])
 		Audio.quit(get_tree(), 2)
@@ -342,8 +395,52 @@ func _autoplay(path: String, pace: float, hold: float) -> void:
 	mission.generate(parsed["seed"])
 	_rebuild()
 	await _wait(hold)
+	var index: int = await _autoplay_commands(parsed["commands"], pace)
+	if index < 0:
+		Audio.quit(get_tree(), 1)
+		return
+	await _wait(hold)
+	var outcome: String = {BreakwaterMission.OUTCOME_WON: "won", BreakwaterMission.OUTCOME_LOST: "lost"}.get(
+		mission.get_outcome(), "in-progress"
+	)
+	print("autoplay: %d commands, outcome %s, hash %s" % [index, outcome, mission.get_state_hash_hex()])
+	Audio.quit(get_tree(), 0)
+
+
+## A campaign log, mission by mission, moving on with N's handler as a player
+## would. Prints the campaign's score and whether it finished, and quits.
+func _autoplay_campaign(run: Dictionary, pace: float, hold: float) -> void:
+	start_campaign(int(run["campaign"]))
+	await _wait(hold)
+	var played := 0
+	for m in run["missions"]:
+		if played > 0:
+			next_mission()
+		if mission.get_seed() != int(m["seed"]):
+			printerr(
+				"autoplay: campaign mission %d is seed %d, log says %d" % [played + 1, mission.get_seed(), m["seed"]]
+			)
+			Audio.quit(get_tree(), 1)
+			return
+		if await _autoplay_commands(m["commands"], pace) < 0:
+			Audio.quit(get_tree(), 1)
+			return
+		played += 1
+	await _wait(hold)
+	print(
+		(
+			"autoplay: campaign %d, %d missions, score %d, %s"
+			% [campaign.number, played, campaign.score(mission), "finished" if campaign.over else "unfinished"]
+		)
+	)
+	Audio.quit(get_tree(), 0)
+
+
+## Plays `commands` through the scene with playback. Returns how many were
+## played, or -1 after reporting a refused one.
+func _autoplay_commands(commands: Array, pace: float) -> int:
 	var index := 0
-	for c in parsed["commands"]:
+	for c in commands:
 		index += 1
 		if pace > 0.0 and c["verb"] != "end":
 			# Show what a player would see before acting: the selection, and
@@ -366,16 +463,10 @@ func _autoplay(path: String, pace: float, hold: float) -> void:
 				err = mission.end_turn()
 		if not err.is_empty():
 			printerr("autoplay: command %d refused: %s" % [index, err])
-			Audio.quit(get_tree(), 1)
-			return
+			return -1
 		await play_events()
 		input.refresh()
-	await _wait(hold)
-	var outcome: String = {BreakwaterMission.OUTCOME_WON: "won", BreakwaterMission.OUTCOME_LOST: "lost"}.get(
-		mission.get_outcome(), "in-progress"
-	)
-	print("autoplay: %d commands, outcome %s, hash %s" % [index, outcome, mission.get_state_hash_hex()])
-	Audio.quit(get_tree(), 0)
+	return index
 
 
 func _wait(seconds: float) -> void:
