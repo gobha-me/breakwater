@@ -7,6 +7,8 @@ extends Node
 ## Waits the given number of frames, saves the root viewport as PNG, then quits
 ## with a non-zero exit code if saving failed. Inert without --capture.
 
+const Audio := preload("res://scripts/audio.gd")
+
 var _path := ""
 var _frames := 30
 
@@ -30,7 +32,7 @@ func _process(_delta: float) -> void:
 	var err := image.save_png(_path)
 	if err != OK:
 		printerr("capture: failed to write %s (error %d)" % [_path, err])
-		get_tree().quit(1)
+		Audio.quit(get_tree(), 1)
 		return
 	print("capture: wrote %s (%dx%d)" % [_path, image.get_width(), image.get_height()])
-	get_tree().quit(0)
+	Audio.quit(get_tree(), 0)

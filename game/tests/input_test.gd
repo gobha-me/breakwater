@@ -40,6 +40,7 @@ func _run() -> void:
 	await _check_undo()
 	await _check_strike_hover()
 	await _check_enemy_phase()
+	await _check_audio()
 	await _check_hints()
 	_main.restart(289)
 	_check(_main.mission.get_seed() == 290, "a rejected seed is never played: 289 starts mission 290")
@@ -183,6 +184,62 @@ func _check_enemy_phase() -> void:
 				in_sync and root != null and root.position.is_equal_approx(_main.board.top_of(Vector2i(u["x"], u["y"])))
 			)
 	_check(in_sync, "after skipping, every unit stands where the mission says")
+
+
+## Every animated event kind has a sound, an enemy phase plays them (even
+## while skipped, when they are recorded but hushed), and M and -/= work
+## without writing the player's settings.
+func _check_audio() -> void:
+	var audio: Node = _main.audio
+	var kinds := {
+		"moved": BreakwaterMission.EVENT_UNIT_MOVED,
+		"shoved": BreakwaterMission.EVENT_UNIT_SHOVED,
+		"damaged": BreakwaterMission.EVENT_UNIT_DAMAGED,
+		"died": BreakwaterMission.EVENT_UNIT_DIED,
+		"drowned": BreakwaterMission.EVENT_UNIT_DROWNED,
+		"building": BreakwaterMission.EVENT_BUILDING_DAMAGED,
+		"turn": BreakwaterMission.EVENT_TURN_STARTED,
+		"attack": BreakwaterMission.EVENT_ATTACK_RESOLVED,
+		"tide": BreakwaterMission.EVENT_TIDE_ROSE,
+		"spawn": BreakwaterMission.EVENT_UNIT_SPAWNED,
+		"ended": BreakwaterMission.EVENT_MISSION_ENDED,
+	}
+	var missing: PackedStringArray = []
+	for name in kinds:
+		for value in [0, 1]:
+			var sound: String = audio.effect_for({"kind": kinds[name], "value": value}, value == 1, "")
+			if sound.is_empty() or not ResourceLoader.exists("res://assets/audio/%s.ogg" % sound):
+				missing.append("%s/%d" % [name, value])
+	_check(missing.is_empty(), "every animated event kind has a sound file (missing: %s)" % ", ".join(missing))
+	_check(
+		audio.effect_for({"kind": BreakwaterMission.EVENT_INTENT_DECLARED, "value": 0}, false, "").is_empty(),
+		"declaring an intent is silent, by design"
+	)
+	_check(
+		audio.effect_for({"kind": BreakwaterMission.EVENT_UNIT_SHOVED, "value": 0}, false, "pull") == "pull",
+		"a pull sounds like a harpoon, not a shove"
+	)
+	var before: int = audio.played.size()
+	_main.restart(20)
+	await _frames(2)
+	await _key(KEY_SPACE)
+	await _frames(3)
+	await _key(KEY_SPACE)
+	var heard: PackedStringArray = audio.played.slice(before)
+	_check("tide" in heard and "turn" in heard, "the enemy phase played its sounds (%s)" % ", ".join(heard))
+	_check(not audio.hushed, "sound comes back after a skip")
+	var volume: float = audio.volume
+	var settings_before := _read_settings()
+	await _key(KEY_M)
+	var bus := AudioServer.get_bus_index("Master")
+	_check(audio.muted and AudioServer.is_bus_mute(bus), "M mutes")
+	await _key(KEY_M)
+	_check(not audio.muted and not AudioServer.is_bus_mute(bus), "M again unmutes")
+	await _key(KEY_MINUS)
+	_check(audio.volume < volume, "- turns the volume down")
+	await _key(KEY_EQUAL)
+	_check(is_equal_approx(audio.volume, volume), "= turns it back up")
+	_check(_read_settings() == settings_before, "a scripted run leaves the player's settings alone")
 
 
 ## Hints follow the first mission: each appears when relevant and retires
@@ -389,6 +446,10 @@ func _key(keycode: Key, shift := false) -> void:
 		Input.parse_input_event(event)
 		await _frames(1)
 	await _settle()
+
+
+func _read_settings() -> String:
+	return FileAccess.get_file_as_string("user://settings.cfg") if FileAccess.file_exists("user://settings.cfg") else ""
 
 
 func _has_engineer(c: Vector2i) -> bool:

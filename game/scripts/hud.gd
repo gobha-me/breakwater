@@ -48,6 +48,7 @@ func _ready() -> void:
 	_hints.text = (
 		"Click an engineer   ·   green: move   ·   orange or WASD: shove   ·   teal or Shift+WASD: pull"
 		+ "\nSpace: end turn   ·   Z undo move   ·   Tab / Esc   ·   R restart   ·   N next   ·   F5 save"
+		+ "   ·   M sound"
 	)
 	add_child(_hints)
 

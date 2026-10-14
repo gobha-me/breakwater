@@ -16,6 +16,7 @@ extends Node3D
 ##   Tab / Esc              next engineer / deselect
 ##   Z                      undo the last move (until a shove or end of turn)
 ##   H / Shift+H            dismiss the current hint / no more hints
+##   M, - / =               sound on or off, volume down / up
 ##   R / N                  restart this seed / next seed
 ##   F5                     save the game as a replayable log
 
@@ -243,6 +244,12 @@ func _unhandled_input(event: InputEvent) -> void:
 			KEY_Z:
 				if _accepting():
 					main.undo()
+			KEY_M:
+				main.hud.say(main.audio.toggle_mute())
+			KEY_MINUS:
+				main.hud.say(main.audio.step_volume(-1))
+			KEY_EQUAL:
+				main.hud.say(main.audio.step_volume(1))
 			KEY_R:
 				main.restart(main.mission.get_seed())
 			KEY_N:

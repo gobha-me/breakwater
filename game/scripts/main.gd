@@ -27,6 +27,7 @@ const UnitsView := preload("res://scripts/units_view.gd")
 const Hud := preload("res://scripts/hud.gd")
 const PlayInput := preload("res://scripts/play_input.gd")
 const Hints := preload("res://scripts/hints.gd")
+const Audio := preload("res://scripts/audio.gd")
 ## Events only an enemy phase produces; a playback containing any is one.
 const ENEMY_PHASE_EVENTS := [
 	BreakwaterMission.EVENT_ATTACK_RESOLVED,
@@ -57,6 +58,7 @@ var units: UnitsView
 var hud: Hud
 var input: PlayInput
 var hints: Hints
+var audio: Audio
 var playing := false
 var save_dir := "user://logs"
 
@@ -66,6 +68,8 @@ var _shoved := false
 var _ended := false
 var _base_speed := 1.0
 var _skipping := false
+## The command whose events are playing, so a pull sounds like a harpoon.
+var _verb := ""
 
 
 func _ready() -> void:
@@ -76,6 +80,7 @@ func _ready() -> void:
 	add_child(units)
 	add_child(hud)
 	_build_environment()
+	get_tree().auto_accept_quit = false  # See _notification.
 	input = PlayInput.new()
 	add_child(input)
 	input.setup(self)
@@ -86,6 +91,9 @@ func _ready() -> void:
 	hints = Hints.new()
 	add_child(hints)
 	hints.setup(args.has("hints") or not scripted, not args.has("hints") and not scripted)
+	audio = Audio.new()
+	add_child(audio)
+	audio.setup(not scripted)
 	save_dir = args.get("save-dir", save_dir)
 	_base_speed = float(args.get("speed", "8" if args.has("autoplay") else "1"))
 	Engine.time_scale = _base_speed
@@ -104,9 +112,15 @@ func _ready() -> void:
 		get_tree().create_timer(float(args.get("watchdog", "120")), true, false, true).timeout.connect(
 			func() -> void:
 				printerr("autoplay: timed out")
-				get_tree().quit(3)
+				Audio.quit(get_tree(), 3)
 		)
 		_autoplay.call_deferred(args["autoplay"], float(args.get("pace", "0")), float(args.get("hold", "0")))
+
+
+## Closing the window quits through Audio.quit, like every other exit.
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_CLOSE_REQUEST:
+		Audio.quit(get_tree(), 0)
 
 
 func _rebuild() -> void:
@@ -205,6 +219,7 @@ func note_command(verb: String) -> void:
 	_acted = _acted or verb in ["move", "shove", "pull"]
 	_shoved = _shoved or verb in ["shove", "pull"]
 	_ended = _ended or verb == "end"
+	_verb = verb
 
 
 ## Plays back everything the mission reported since the last call, in order,
@@ -227,14 +242,17 @@ func play_events() -> void:
 				hud.step(step)
 				await _wait(0.35)
 			units.mark_actor(int(e["unit"]) if int(e["kind"]) in ACTOR_EVENTS else -1)
+		audio.play(Audio.effect_for(e, not _is_crawler(int(e["unit"])), _verb))
 		await _play(e)
 		if enemy and int(e["kind"]) in ACTOR_EVENTS:
 			await _wait(0.12)
 	units.mark_actor(-1)
 	_sync()
+	_verb = ""
 	if _skipping:
 		Engine.time_scale = _base_speed
 		_skipping = false
+		audio.hushed = false
 	playing = false
 	playback_finished.emit()
 
@@ -244,6 +262,7 @@ func play_events() -> void:
 func skip() -> void:
 	if playing and not _skipping:
 		_skipping = true
+		audio.hushed = true
 		Engine.time_scale = maxf(_base_speed, 30.0)
 
 
@@ -318,7 +337,7 @@ func _autoplay(path: String, pace: float, hold: float) -> void:
 	var parsed := BreakwaterMission.parse_log(FileAccess.get_file_as_string(path))
 	if not parsed["error"].is_empty():
 		printerr("autoplay: %s: %s" % [path, parsed["error"]])
-		get_tree().quit(2)
+		Audio.quit(get_tree(), 2)
 		return
 	mission.generate(parsed["seed"])
 	_rebuild()
@@ -347,7 +366,7 @@ func _autoplay(path: String, pace: float, hold: float) -> void:
 				err = mission.end_turn()
 		if not err.is_empty():
 			printerr("autoplay: command %d refused: %s" % [index, err])
-			get_tree().quit(1)
+			Audio.quit(get_tree(), 1)
 			return
 		await play_events()
 		input.refresh()
@@ -356,7 +375,7 @@ func _autoplay(path: String, pace: float, hold: float) -> void:
 		mission.get_outcome(), "in-progress"
 	)
 	print("autoplay: %d commands, outcome %s, hash %s" % [index, outcome, mission.get_state_hash_hex()])
-	get_tree().quit(0)
+	Audio.quit(get_tree(), 0)
 
 
 func _wait(seconds: float) -> void:
