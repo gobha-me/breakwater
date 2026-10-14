@@ -215,9 +215,25 @@ to need one.
 - **Measured and not adopted (#96):** two more crawlers (spawns 2, 2, 2, 1).
   That gave 960 with shoves and 132 shove-free at 1M, against 175: a small
   effect for a lot more difficulty.
-- **Measured for #72 and parked:** a Rammer, a crawler whose strike pushes,
-  added as a sixth creature. It left the shove-free share unchanged (≥ 566 and
-  ≥ 556 at 10M under #71's rules).
+- **Measured for #72 and not adopted:** the Rammer, a crawler whose strike
+  pushes. Its ram pushed the unit on the target tile by the shove rules, and a
+  cottage there took a bump. Several targeting rules were tried: hunting
+  engineers, or ramming wherever it did the most harm, including knocking
+  engineers off guard posts and pushing crawlers into cottages. None made
+  shoves more necessary:
+  - **Under #71's rules**, as a sixth creature: ≥ 566 and ≥ 556 shove-free at
+    10M, against ≥ 559 without it.
+  - **Under #96's rules**, as a sixth creature (the guard-post rule):
+    - with shoves: 965 winnable;
+    - shove-free at 10M: ≥ 161 winnable, 205 unwinnable, 634 unproven;
+    - a 48-seed spot check at 50M put the shove-free share near **31%**,
+      against about 19% without it.
+  - Replacing a crawler instead of adding one took pressure off the town
+    (≥ 252 against ≥ 175 at 1M under #71).
+
+  The extra body blocks crawler paths and shoves crawlers about. That helps
+  passive play more than the ram hurts it. The prototype is kept on branch
+  `72-rammer`, and its Meshy model is not shipped.
 
 Seeds the solver cannot prove at the proof budget are rejected at generation
 (`kRejectedSeeds`), so every mission offered is winnable. At 10M nodes, 997 of
