@@ -113,3 +113,59 @@ tile and the seed, never on a cottage's tile. It hides while anything stands on
 its tile, and once the tile floods.
 
 **Cost:** 3 × 24 = 72 credits. **Licence:** as above.
+
+## Audio (2026-10-14, #78)
+
+Fifteen sound effects and one music loop, generated with the owner's `venice`
+CLI and shipped in `game/assets/audio/`.
+
+**Sound effects:** `venice sfx` with `elevenlabs-sound-effects-v2`, mastered
+by the CLI (`--master`: 48 kHz, 24-bit, -16 LUFS, -1 dBTP). Every prompt began:
+
+> Stylized cozy tabletop game sound effect, clean, no music, no voice:
+
+| File | Length | Prompt after the lead |
+|---|---|---|
+| `step.ogg` | 1 s | soft quick footsteps of a small figure on grass |
+| `scuttle.ogg` | 1 s | small crab scuttling quickly across wet sand |
+| `shove.ogg` | 1 s | quick whoosh followed by a soft shove thud |
+| `pull.ogg` | 1 s | harpoon rope thrown out and quickly reeled in with a zip |
+| `hit.ogg` | 1 s | dull wooden thump impact |
+| `strike.ogg` | 1 s | crab claw snapping shut with a sharp crunch |
+| `die.ogg` | 1 s | small creature defeated, soft collapse and puff |
+| `drown.ogg` | 2 s | splash into water followed by sinking bubbles |
+| `building_hit.ogg` | 2 s | wooden cottage wall creaking and cracking |
+| `razed.ogg` | 3 s | small wooden cottage collapsing, timbers crashing down |
+| `tide.ogg` | 3 s | ocean wave swelling and washing ashore |
+| `spawn.ogg` | 2 s | sea creature emerging from water with a splash |
+| `win.ogg` | 3 s | short cheerful seaside victory jingle with bells |
+| `lose.ogg` | 3 s | short somber defeat stinger, low horn |
+| `turn.ogg` | 1 s | single soft ship bell ding |
+
+**Music:** `venice music` with `elevenlabs-music`, instrumental, 75 s requested
+(73 s delivered), mastered. The prompt:
+
+> Gentle, watchful coastal ambience for a calm turn-based tactics game: soft
+> waves, distant gulls, warm low pads and a sparse plucked melody, unhurried,
+> instrumental, suitable as a seamless background loop
+
+**Job ids:** the CLI prints no queue id for a synchronous run, so none are
+recorded. The model, prompt, length and date identify each generation.
+
+**Edits** (ffmpeg):
+
+- Every file is re-encoded to Ogg Vorbis at quality 5, 44.1 kHz; the effects
+  are mono, the music stereo.
+- `building_hit` came out quiet (-24 LUFS), so it gets +8 dB behind a limiter,
+  reaching -20 LUFS.
+- The music fades in over its first ~5 s and out over its last ~9 s, despite
+  `--loop`. A loop would dip into near-silence every time round. It is cut to
+  4-63 s, and its last 3 s are crossfaded into its first 3 s with equal-power
+  curves, so the end runs straight into the start. That gives 56 s, holding
+  between -14 and -18 LUFS.
+- In the game the music plays 12 dB under the effects.
+
+**Cost:** 15 effects at $0.01 each, plus the music at $1.38: **$1.53**.
+
+**Licence:** generated on the owner's Venice plan and shipped under the
+repository's BSD 3-Clause licence.

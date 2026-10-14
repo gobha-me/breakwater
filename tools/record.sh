@@ -2,7 +2,8 @@
 # Record a mission log as video: the main scene plays the log at real-time
 # speed in Godot's Movie Maker mode (fixed 30 fps, so the same log always
 # gives the same frame count), showing each selection and shove preview the
-# way a player would see them. Output is MP4 when ffmpeg is installed.
+# way a player would see them, with the game's sound. Output is MP4 when
+# ffmpeg is installed.
 #   tools/record.sh <log> [out.mp4]
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -22,7 +23,9 @@ source tools/display.sh
 
 frames="$(ffprobe -v error -count_frames -select_streams v:0 -show_entries stream=nb_read_frames -of csv=p=0 "$avi" 2>/dev/null || echo "?")"
 if command -v ffmpeg >/dev/null; then
-    ffmpeg -loglevel error -y -i "$avi" -c:v libx264 -crf 23 -pix_fmt yuv420p -movflags +faststart "$out"
+    # Movie Maker mixes the game's audio into the AVI; keep it.
+    ffmpeg -loglevel error -y -i "$avi" -c:v libx264 -crf 23 -pix_fmt yuv420p -c:a aac -b:a 160k \
+        -movflags +faststart "$out"
     rm -f "$avi"
 else
     out="$avi"

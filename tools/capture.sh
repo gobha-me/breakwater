@@ -21,7 +21,9 @@ rm -f "$out"
 
 args=(-- --capture="$out" --capture-frames="$frames" "${extra[@]}")
 source tools/display.sh
-run=("${display[@]}" "${GODOT_BIN:-godot}" --path game --resolution 1280x720 "${display_args[@]}" "${args[@]}")
+# Silent: a capture renders a still, and the gates must not play sound.
+run=("${display[@]}" "${GODOT_BIN:-godot}" --path game --resolution 1280x720 --audio-driver Dummy
+    "${display_args[@]}" "${args[@]}")
 
 # One retry: a compositor occasionally fails to present the first window.
 status=0
