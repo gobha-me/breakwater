@@ -41,10 +41,10 @@ func _run() -> void:
 	await _check_strike_hover()
 	await _check_enemy_phase()
 	await _check_hints()
-	_main.restart(172)
-	_check(_main.mission.get_seed() == 173, "a rejected seed is never played: 172 starts mission 173")
+	_main.restart(162)
+	_check(_main.mission.get_seed() == 163, "a rejected seed is never played: 162 starts mission 163")
 	await _key(KEY_N)
-	_check(_main.mission.get_seed() == 174, "N moves to the next offered seed")
+	_check(_main.mission.get_seed() == 164, "N moves to the next offered seed")
 	for s in str(args.get("seeds", "20")).split(","):
 		await _play_by_clicks(int(s))
 	for path in str(args.get("play-logs", "")).split(",", false):
@@ -330,10 +330,24 @@ func _shovable_crawler(mission: BreakwaterMission, id: int) -> Vector2i:
 	return Vector2i(-1, -1)
 
 
+## Clicks tile `c` where a player would: its centre if that picks it, else
+## the first visible part of its top, as when a unit in front hides the
+## centre. A tile with no clickable part fails the test.
 func _click(c: Vector2i) -> void:
 	var camera := root.get_viewport().get_camera_3d()
 	var height := 0.3 if _has_unit(c) else 0.0
 	var screen := camera.unproject_position(_main.board.top_of(c) + Vector3(0, height, 0))
+	if _main.input.pick_for_click(screen) != c:
+		var aimed := false
+		for offset in [
+			Vector3(-0.4, 0, 0), Vector3(0.4, 0, 0), Vector3(0, 0, -0.4), Vector3(-0.4, 0, -0.4), Vector3(0.4, 0, -0.4)
+		]:
+			var point := camera.unproject_position(_main.board.top_of(c) + offset)
+			if _main.input.pick_for_click(point) == c:
+				screen = point
+				aimed = true
+				break
+		_check(aimed or _has_unit(c), "tile %s has a clickable part" % c)
 	for pressed in [true, false]:
 		var event := InputEventMouseButton.new()
 		event.button_index = MOUSE_BUTTON_LEFT

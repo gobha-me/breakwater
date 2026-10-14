@@ -21,6 +21,7 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -31,7 +32,9 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <thread>
 #include <utility>
+#include <vector>
 
 namespace {
 
@@ -109,17 +112,40 @@ int solve_range(std::uint64_t first, std::uint64_t last, SolveOptions options) {
 }
 
 int check_offered() {
+    // Seeds are independent, so they are solved on every core; the report is
+    // written afterwards in seed order, so the output never depends on timing.
+    struct Proof {
+        Verdict verdict = Verdict::Unproven;
+        bool witness_ok = true;
+    };
+    std::vector<Proof> proofs(breakwater::kOfferedSeeds);
+    std::atomic<std::uint64_t> next{0};
+    {
+        std::vector<std::jthread> workers;
+        const unsigned count = std::max(1U, std::thread::hardware_concurrency());
+        workers.reserve(count);
+        for (unsigned i = 0; i < count; ++i) {
+            workers.emplace_back([&proofs, &next] {
+                for (std::uint64_t seed = next++; seed < breakwater::kOfferedSeeds; seed = next++) {
+                    const auto result =
+                        breakwater::solve(Mission::generate(seed), {.node_budget = breakwater::kProofBudget});
+                    proofs.at(seed) = {.verdict = result.verdict,
+                                       .witness_ok = result.verdict != Verdict::Winnable || witness_wins(seed, result)};
+                }
+            });
+        }
+    }
     int mismatches = 0;
     std::size_t proven = 0;
     for (std::uint64_t seed = 0; seed < breakwater::kOfferedSeeds; ++seed) {
-        const auto result = breakwater::solve(Mission::generate(seed), {.node_budget = breakwater::kProofBudget});
-        const bool winnable = result.verdict == Verdict::Winnable;
-        if (winnable && !witness_wins(seed, result)) {
+        const Proof& proof = proofs.at(seed);
+        const bool winnable = proof.verdict == Verdict::Winnable;
+        if (!proof.witness_ok) {
             std::cout << std::format("seed {}: witness does not win\n", seed);
             ++mismatches;
         } else if (winnable != breakwater::is_offered(seed)) {
             std::cout << std::format("seed {}: solver says {}, kRejectedSeeds says {}\n", seed,
-                                     verdict_name(result.verdict),
+                                     verdict_name(proof.verdict),
                                      breakwater::is_offered(seed) ? "offered" : "rejected");
             ++mismatches;
         }

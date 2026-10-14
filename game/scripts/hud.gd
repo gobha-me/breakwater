@@ -1,5 +1,6 @@
 extends CanvasLayer
-## Turn, tide, each engineer's state, the last message, and the ending.
+## Turn, tide, the town, each engineer's state, the last message, and the
+## ending.
 
 const ACTION_NAMES := {
 	BreakwaterMission.ACTION_READY: "ready",
@@ -11,6 +12,7 @@ const ACTION_NAMES := {
 var last_step := ""
 
 var _status: Label
+var _town: Label
 var _engineers: Label
 var _message: Label
 var _banner: Label
@@ -31,6 +33,7 @@ func _ready() -> void:
 	var column := VBoxContainer.new()
 	panel.add_child(column)
 	_status = _label(column, 22)
+	_town = _label(column, 18)
 	_engineers = _label(column, 18)
 	_message = _label(column, 16)
 	_message.modulate = Color(1, 0.8, 0.5)
@@ -77,6 +80,20 @@ func sync(mission: BreakwaterMission) -> void:
 		"Turn %d / %d     Tide %d" % [mission.get_turn(), mission.get_turn_count(), tide]
 		+ ("" if over else "  (next %d)" % (tide + 1))
 	)
+	# One house per cottage, a cross per razed one, and how many more the
+	# town can lose before it falls.
+	var razed := mission.get_razed()
+	var size := mission.get_town_size()
+	var spare := mission.get_town_falls_after() - razed - 1
+	var town_state := "can lose %d" % spare
+	if spare < 0:
+		town_state = "fallen"
+	elif mission.get_outcome() == BreakwaterMission.OUTCOME_WON:
+		town_state = "held"
+	elif spare == 0:
+		town_state = "one more razed and it falls"
+	_town.text = "Town   %s%s   %s" % ["⌂".repeat(size - razed), "✕".repeat(razed), town_state]
+	_town.modulate = Color(1, 0.55, 0.45) if spare <= 0 and not over else Color(1, 1, 1)
 	var lines: PackedStringArray = []
 	for u in mission.get_units():
 		if not u["engineer"]:

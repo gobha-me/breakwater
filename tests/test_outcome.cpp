@@ -24,6 +24,7 @@ using breakwater::EndTurnCommand;
 using breakwater::Event;
 using breakwater::EventKind;
 using breakwater::Intent;
+using breakwater::kTownFallsAfter;
 using breakwater::kTurnCount;
 using breakwater::Mission;
 using breakwater::MoveCommand;
@@ -149,11 +150,11 @@ TEST_CASE("scripted mission: the solver's witness wins, with shoves", "[outcome]
 }
 
 TEST_CASE("scripted mission: idling on the beach loses every engineer", "[outcome][script]") {
-    auto [mission, hashes] = replay("loss-engineers-seed17.log");
-    CHECK(hashes == golden_hashes("loss-engineers-seed17.hashes"));
+    auto [mission, hashes] = replay("loss-engineers-seed39.log");
+    CHECK(hashes == golden_hashes("loss-engineers-seed39.hashes"));
     CHECK(mission.outcome() == Outcome::Lost);
     CHECK_FALSE(any_engineer_alive(mission.board()));
-    CHECK(standing_buildings(mission.board()) > 0);
+    CHECK(mission.razed() == 0);
     require_over(mission);
 }
 
@@ -162,7 +163,8 @@ TEST_CASE("scripted mission: never shoving loses the town", "[outcome][script]")
     CHECK(hashes == golden_hashes("loss-town-seed19.hashes"));
     CHECK(mission.outcome() == Outcome::Lost);
     CHECK(any_engineer_alive(mission.board()));
-    CHECK(standing_buildings(mission.board()) == 0);
+    CHECK(mission.razed() == mission.town_falls_after()); // Two of three: one still stands.
+    CHECK(standing_buildings(mission.board()) == 1);
     require_over(mission);
 }
 
@@ -214,6 +216,75 @@ TEST_CASE("a loss ends the enemy phase on the spot", "[outcome][loss]") {
         CHECK(mission.outcome() == Outcome::Lost);
         CHECK_FALSE(mission.intent(c).has_value()); // The only ending that comes before attacks clear them.
         require_over(mission);
+    }
+}
+
+TEST_CASE("the town falls when its second building is razed", "[outcome][town]") {
+    SECTION("three buildings: the first razed is survivable, the second loses") {
+        Board board = flat_board();
+        (void)board.add_unit(UnitKind::Crawler, {3, 3}, 2);
+        (void)board.add_unit(UnitKind::Crawler, {5, 3}, 2);
+        (void)board.add_unit(UnitKind::Engineer, {0, 7}, 2);
+        add_building(board, {3, 4}, 2);
+        add_building(board, {5, 4}, 2);
+        add_building(board, {7, 7}, 2);
+        Mission one = scenario(board, {Intent{Direction::South}});
+        REQUIRE(one.town_size() == 3);
+        REQUIRE(one.town_falls_after() == kTownFallsAfter);
+        REQUIRE(one.apply(EndTurnCommand{}));
+        CHECK(one.razed() == 1);
+        CHECK(one.outcome() == Outcome::InProgress);
+
+        Mission two = scenario(board, {Intent{Direction::South}, Intent{Direction::South}});
+        REQUIRE(two.apply(EndTurnCommand{}));
+        CHECK(two.razed() == 2);
+        CHECK(two.outcome() == Outcome::Lost);
+        CHECK(standing_buildings(two.board()) == 1); // Lost with a cottage still standing.
+    }
+
+    SECTION("a town smaller than the threshold falls only when all of it is razed") {
+        Board board = flat_board();
+        (void)board.add_unit(UnitKind::Crawler, {3, 3}, 2);
+        (void)board.add_unit(UnitKind::Engineer, {0, 7}, 2);
+        add_building(board, {3, 4}, 2);
+        Mission mission = scenario(board, {Intent{Direction::South}});
+        REQUIRE(mission.town_falls_after() == 1);
+        REQUIRE(mission.apply(EndTurnCommand{}));
+        CHECK(mission.outcome() == Outcome::Lost);
+    }
+
+    SECTION("a shove that razes one of three buildings counts, and does not lose") {
+        Board board = flat_board();
+        const auto e = board.add_unit(UnitKind::Engineer, {3, 5}, 2);
+        (void)board.add_unit(UnitKind::Crawler, {3, 4}, 2);
+        add_building(board, {3, 3}, 1);
+        add_building(board, {6, 6}, 1);
+        add_building(board, {7, 7}, 2);
+        Mission mission = scenario(board);
+        REQUIRE(mission.apply(ShoveCommand{.engineer = e, .dir = Direction::North}));
+        CHECK(mission.razed() == 1);
+        CHECK(mission.outcome() == Outcome::InProgress);
+    }
+
+    SECTION("the town's starting size is part of the state hash") {
+        // Same board after the strike, but one mission started with a third
+        // building: it has one razed toward the fall, the other none.
+        Board three = flat_board();
+        (void)three.add_unit(UnitKind::Crawler, {3, 3}, 2);
+        (void)three.add_unit(UnitKind::Engineer, {0, 7}, 2);
+        add_building(three, {3, 4}, 2);
+        add_building(three, {6, 6}, 2);
+        add_building(three, {7, 7}, 2);
+        Board two = three;
+        two.set_tile({3, 4}, Tile{.elevation = 8});
+        Mission struck = scenario(three, {Intent{Direction::South}});
+        Mission missed = scenario(two, {Intent{Direction::South}});
+        REQUIRE(struck.apply(EndTurnCommand{}));
+        REQUIRE(missed.apply(EndTurnCommand{}));
+        REQUIRE(struck.board().state_hash() == missed.board().state_hash());
+        CHECK(struck.razed() == 1);
+        CHECK(missed.razed() == 0);
+        CHECK(struck.state_hash() != missed.state_hash());
     }
 }
 

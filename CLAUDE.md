@@ -32,7 +32,8 @@ captures, replay hashes), never just claim completion.
 7. `tools/seeds_check.sh`: every offered seed (0-999) is proven winnable by the
    solver with a replayed witness, and the unproven ones are exactly
    `kRejectedSeeds`. A rule change that moves them means regenerating the list
-   with `bw_solve --range 0-999 --budget 1000000`.
+   with `bw_solve --range 0-999 --budget 2000000` (`kProofBudget`). Balance claims
+   use the shove-free sweep at 10M nodes; see `docs/RULES.md`, "Balance".
 8. `tools/godot_smoke.sh`: headless Godot loads the extension, checks the
    bridge, autoplays every log through the scene, and plays by injected input.
 9. `tools/golden.sh`: renders the opening of `win-seed20.log` and compares it

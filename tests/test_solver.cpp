@@ -60,13 +60,13 @@ Mission last_stand() {
 } // namespace
 
 TEST_CASE("every witness the solver returns wins on replay", "[solver]") {
-    for (std::uint64_t seed = 0; seed < 50; ++seed) {
+    for (std::uint64_t seed = 0; seed < 10; ++seed) {
         if (!breakwater::is_offered(seed)) {
             continue; // Rejected: the solver could not prove it (seeds.hpp).
         }
         CAPTURE(seed);
         const Mission mission = Mission::generate(seed);
-        const auto result = breakwater::solve(mission);
+        const auto result = breakwater::solve(mission, {.node_budget = breakwater::kProofBudget});
         REQUIRE(result.verdict == Verdict::Winnable);
         CHECK(wins(mission, result.witness));
     }

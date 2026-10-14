@@ -24,7 +24,10 @@ const HINTS := [
 		"tide",
 		"Blue hatching marks tiles the next tide will flood. Engineers drown in water.\nPress Space to end your turn."
 	],
-	["goal", "Hold the town for 5 turns: keep at least one cottage and one engineer standing."],
+	[
+		"goal",
+		"Hold the town for 5 turns: it falls when two of its three cottages are razed. Keep an engineer standing, too."
+	],
 ]
 
 var enabled := true
