@@ -4,7 +4,7 @@ extends CanvasLayer
 
 const ACTION_NAMES := {
 	BreakwaterMission.ACTION_READY: "ready",
-	BreakwaterMission.ACTION_MOVED: "moved, may shove",
+	BreakwaterMission.ACTION_MOVED: "moved, may shove or pull",
 	BreakwaterMission.ACTION_DONE: "done",
 }
 
@@ -40,14 +40,14 @@ func _ready() -> void:
 
 	_hints = Label.new()
 	_hints.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
-	_hints.offset_top = -40
+	_hints.offset_top = -64
 	_hints.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_hints.add_theme_font_size_override("font_size", 16)
 	_hints.add_theme_constant_override("outline_size", 6)
 	_hints.add_theme_color_override("font_outline_color", Color(0, 0, 0))
 	_hints.text = (
-		"Click an engineer   ·   green: move   ·   orange or WASD: shove   ·   Space: end turn"
-		+ "   ·   Z undo move   ·   Tab / Esc   ·   R restart   ·   N next   ·   F5 save"
+		"Click an engineer   ·   green: move   ·   orange or WASD: shove   ·   teal or Shift+WASD: pull"
+		+ "\nSpace: end turn   ·   Z undo move   ·   Tab / Esc   ·   R restart   ·   N next   ·   F5 save"
 	)
 	add_child(_hints)
 

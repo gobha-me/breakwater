@@ -15,6 +15,7 @@ using breakwater::EndTurnCommand;
 using breakwater::MissionLog;
 using breakwater::MoveCommand;
 using breakwater::parse_log;
+using breakwater::PullCommand;
 using breakwater::ShoveCommand;
 using breakwater::write_log;
 
@@ -37,7 +38,9 @@ TEST_CASE("write then parse round-trips every command", "[log]") {
                      ShoveCommand{.engineer = 1, .dir = Direction::North},
                      ShoveCommand{.engineer = 1, .dir = Direction::East},
                      ShoveCommand{.engineer = 1, .dir = Direction::South},
-                     ShoveCommand{.engineer = 99, .dir = Direction::West}, EndTurnCommand{}},
+                     ShoveCommand{.engineer = 99, .dir = Direction::West},
+                     PullCommand{.engineer = 2, .dir = Direction::North},
+                     PullCommand{.engineer = 0, .dir = Direction::West}, EndTurnCommand{}},
     };
     const auto parsed = parse_log(write_log(log));
     REQUIRE(parsed);
@@ -105,6 +108,13 @@ TEST_CASE("malformed logs are refused with the line and the reason", "[log][malf
         {.text = "breakwater-log 1\nseed 1\nshove z N\n",
          .line = 3,
          .message = "'shove' engineer must be an integer in range"},
+        {.text = "breakwater-log 1\nseed 1\npull 0 Q\n", .line = 3, .message = "'pull' direction must be N, E, S or W"},
+        {.text = "breakwater-log 1\nseed 1\npull 0 N W\n",
+         .line = 3,
+         .message = "'pull' takes an engineer and a direction"},
+        {.text = "breakwater-log 1\nseed 1\npull -1 N\n",
+         .line = 3,
+         .message = "'pull' engineer must be an integer in range"},
         {.text = "breakwater-log 1\nseed 1\nend now\n", .line = 3, .message = "'end' takes no arguments"},
     });
     for (const Case& c : cases) {

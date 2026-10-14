@@ -11,13 +11,16 @@ const HINTS := [
 	["select", "Click one of your engineers to select it."],
 	[
 		"act",
-		"Green tiles: where it can move.\nOrange: units it can shove away. Hover one to see exactly what the shove will do."
+		(
+			"Green tiles: where it can move.\nOrange: units it can shove away. Teal: units two tiles off its harpoon"
+			+ " can pull one tile closer.\nHover one to see exactly what will happen."
+		)
 	],
 	[
 		"strikes",
 		(
 			"Red arrows are next turn's crawler strikes. A strike razes a cottage or fells an engineer."
-			+ "\nShove a crawler and its strike turns with it."
+			+ "\nShove or pull a crawler and its strike moves with it."
 		)
 	],
 	[

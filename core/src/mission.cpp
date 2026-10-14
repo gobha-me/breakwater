@@ -233,6 +233,13 @@ std::expected<void, Rejection> Mission::apply(const Command& command) {
         }
         return result;
     }
+    if (const auto* pull = std::get_if<PullCommand>(&command)) {
+        auto result = apply_pull(*pull);
+        if (result) {
+            (void)check_loss(); // So can a pull.
+        }
+        return result;
+    }
     apply_end_turn();
     return {};
 }
@@ -294,39 +301,61 @@ std::expected<void, Rejection> Mission::apply_shove(const ShoveCommand& shove) {
         return std::unexpected{Rejection::NothingToShove};
     }
 
-    const Coord landing = step(target, shove.dir);
-    const auto blocker = in_bounds(landing) ? board_.unit_at(landing) : std::nullopt;
     actions_.at(shove.engineer) = ActionState::Done;
+    push_and_report(*victim, target, shove.dir);
+    return {};
+}
 
-    const PushOutcome outcome = board_.push(*victim, shove.dir);
-    const Coord after = board_.unit(*victim).pos;
-    events_.push_back({.kind = EventKind::UnitShoved, .unit = *victim, .from = target, .to = after});
+std::expected<void, Rejection> Mission::apply_pull(const PullCommand& pull) {
+    if (const auto ok = check_engineer(pull.engineer); !ok) {
+        return ok;
+    }
+    if (actions_.at(pull.engineer) == ActionState::Done) {
+        return std::unexpected{Rejection::AlreadyActed};
+    }
+    const Coord target = pull_target(board_.unit(pull.engineer).pos, pull.dir);
+    const auto victim = in_bounds(target) ? board_.unit_at(target) : std::nullopt;
+    if (!victim) {
+        return std::unexpected{Rejection::NothingToPull};
+    }
+    actions_.at(pull.engineer) = ActionState::Done;
+    // Toward the engineer: the tile between them is where it lands, or what
+    // blocks it.
+    push_and_report(*victim, target, static_cast<Direction>((static_cast<int>(pull.dir) + 2) % 4));
+    return {};
+}
+
+void Mission::push_and_report(UnitId victim, Coord at, Direction dir) {
+    const Coord landing = step(at, dir);
+    const auto blocker = in_bounds(landing) ? board_.unit_at(landing) : std::nullopt;
+    const PushOutcome outcome = board_.push(victim, dir);
+    const Coord after = board_.unit(victim).pos;
+    events_.push_back({.kind = EventKind::UnitShoved, .unit = victim, .from = at, .to = after});
     switch (outcome) {
     case PushOutcome::Moved:
     case PushOutcome::NoEffect:
         break;
     case PushOutcome::BlockedByEdge:
-        emit_damage(*victim);
+        emit_damage(victim);
         break;
     case PushOutcome::BlockedByUnit:
-        emit_damage(*victim);
+        emit_damage(victim);
         if (blocker) { // Always set: it is what blocked the push.
             emit_damage(*blocker);
         }
         break;
     case PushOutcome::BlockedByBuilding:
-        emit_damage(*victim);
+        emit_damage(victim);
         events_.push_back({.kind = EventKind::BuildingDamaged,
-                           .unit = *victim,
-                           .from = target,
+                           .unit = victim,
+                           .from = at,
                            .to = landing,
                            .value = board_.tile(landing).building_hp});
         break;
     case PushOutcome::Drowned:
-        events_.push_back({.kind = EventKind::UnitDrowned, .unit = *victim, .from = target, .to = after});
+        events_.push_back({.kind = EventKind::UnitDrowned, .unit = victim, .from = at, .to = after});
         break;
     }
-    return {};
 }
 
 void Mission::apply_end_turn() {

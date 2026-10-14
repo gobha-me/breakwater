@@ -24,6 +24,7 @@ using breakwater::Mission;
 using breakwater::MissionLog;
 using breakwater::MoveCommand;
 using breakwater::Outcome;
+using breakwater::PullCommand;
 using breakwater::Rng;
 using breakwater::ShoveCommand;
 using breakwater::UnitId;
@@ -113,6 +114,10 @@ std::vector<Command> legal_commands(const Mission& mission) {
             if (breakwater::in_bounds(target) && mission.board().unit_at(target)) {
                 commands.emplace_back(ShoveCommand{.engineer = id, .dir = dir});
             }
+            const Coord far = breakwater::pull_target(u.pos, dir);
+            if (breakwater::in_bounds(far) && mission.board().unit_at(far)) {
+                commands.emplace_back(PullCommand{.engineer = id, .dir = dir});
+            }
         }
     }
     return commands;
@@ -122,12 +127,14 @@ std::vector<Command> legal_commands(const Mission& mission) {
 /// off the board.
 Command random_command(Rng& rng) {
     const auto id = static_cast<UnitId>(rng.below(10));
-    switch (rng.below(3)) {
+    switch (rng.below(4)) {
     case 0:
         return MoveCommand{.engineer = id,
                            .to = {static_cast<int>(rng.below(12)) - 2, static_cast<int>(rng.below(12)) - 2}};
     case 1:
         return ShoveCommand{.engineer = id, .dir = static_cast<Direction>(rng.below(4))};
+    case 2:
+        return PullCommand{.engineer = id, .dir = static_cast<Direction>(rng.below(4))};
     default:
         return EndTurnCommand{};
     }

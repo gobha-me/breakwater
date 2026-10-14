@@ -16,8 +16,8 @@ enum class Verdict : std::uint8_t {
 struct SolveOptions {
     /// Positions the search may visit before giving up with Unproven.
     std::uint64_t node_budget = 1'000'000;
-    /// False restricts the player to moving and ending turns, to measure
-    /// whether a mission needs a shove at all (#19).
+    /// False restricts the player to moving and ending turns, with no shove
+    /// and no pull, to measure whether a mission needs a push at all (#19).
     bool allow_shove = true;
 };
 

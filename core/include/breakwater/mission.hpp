@@ -79,16 +79,30 @@ struct EndTurnCommand {
     friend constexpr bool operator==(EndTurnCommand, EndTurnCommand) = default;
 };
 
-using Command = std::variant<MoveCommand, ShoveCommand, EndTurnCommand>;
+/// The harpoon: pull the unit two tiles away in `dir` one tile toward the
+/// engineer (docs/RULES.md, "Player phase"). Like a shove, it ends the
+/// engineer's turn.
+struct PullCommand {
+    UnitId engineer = 0;
+    Direction dir = Direction::North;
+
+    friend constexpr bool operator==(const PullCommand&, const PullCommand&) = default;
+};
+
+using Command = std::variant<MoveCommand, ShoveCommand, EndTurnCommand, PullCommand>;
+
+/// The tile a pull in `dir` from `from` reaches: two tiles away.
+[[nodiscard]] constexpr Coord pull_target(Coord from, Direction dir) noexcept { return step(step(from, dir), dir); }
 
 /// Why a command was refused. A refused command changes nothing.
 enum class Rejection : std::uint8_t {
     NotAnEngineer,  ///< No such unit, or it is a crawler.
     UnitDead,       ///< The engineer is dead.
     AlreadyMoved,   ///< The engineer moved this turn.
-    AlreadyActed,   ///< The engineer shoved this turn.
+    AlreadyActed,   ///< The engineer shoved or pulled this turn.
     Unreachable,    ///< The destination is not in reachable().
     NothingToShove, ///< No living unit on the adjacent tile.
+    NothingToPull,  ///< No living unit two tiles away in that direction.
     MissionOver,    ///< The mission has been won or lost.
 };
 
@@ -101,11 +115,13 @@ enum class Rejection : std::uint8_t {
     case Rejection::AlreadyMoved:
         return "engineer already moved this turn";
     case Rejection::AlreadyActed:
-        return "engineer already shoved this turn";
+        return "engineer already acted this turn";
     case Rejection::Unreachable:
         return "destination is out of reach";
     case Rejection::NothingToShove:
         return "nothing to shove there";
+    case Rejection::NothingToPull:
+        return "nothing to pull there";
     case Rejection::MissionOver:
         return "the mission is over";
     }
@@ -116,7 +132,7 @@ enum class Rejection : std::uint8_t {
 /// an observation log, not state: they are not part of state_hash().
 enum class EventKind : std::uint8_t {
     UnitMoved,       ///< `unit` walked from `from` to `to`.
-    UnitShoved,      ///< `unit` was pushed from `from`; `to == from` when blocked.
+    UnitShoved,      ///< `unit` was shoved or pulled from `from`; `to == from` when blocked.
     UnitDamaged,     ///< `unit` has `value` HP left.
     UnitDied,        ///< `unit` died of damage at `from`.
     UnitDrowned,     ///< `unit` drowned at `to`.
@@ -200,6 +216,10 @@ private:
     [[nodiscard]] std::expected<void, Rejection> check_engineer(UnitId id) const;
     std::expected<void, Rejection> apply_move(const MoveCommand& move);
     std::expected<void, Rejection> apply_shove(const ShoveCommand& shove);
+    std::expected<void, Rejection> apply_pull(const PullCommand& pull);
+    /// Pushes `victim` from `at` one tile in `dir` and reports what happened:
+    /// the shared end of a shove and a pull.
+    void push_and_report(UnitId victim, Coord at, Direction dir);
     void apply_end_turn();
     void resolve_attacks();
     void raise_tide();

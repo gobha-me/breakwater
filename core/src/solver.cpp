@@ -64,6 +64,10 @@ constexpr std::array kDirections{Direction::North, Direction::East, Direction::S
             if (in_bounds(target) && board.unit_at(target)) {
                 commands.emplace_back(ShoveCommand{.engineer = id, .dir = dir});
             }
+            const Coord far = pull_target(u.pos, dir);
+            if (in_bounds(far) && board.unit_at(far)) {
+                commands.emplace_back(PullCommand{.engineer = id, .dir = dir});
+            }
         }
     }
     commands.emplace_back(EndTurnCommand{});
