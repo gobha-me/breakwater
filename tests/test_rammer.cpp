@@ -62,51 +62,69 @@ std::vector<Event> of_kind(const std::vector<Event>& events, EventKind kind) {
 } // namespace
 
 TEST_CASE("rammer intent follows the ranking key in docs/RULES.md", "[rammer][plan]") {
-    SECTION("a ram that drowns beats a nearer one that only moves") {
-        Board board = flat_board();
-        const auto r = board.add_unit(UnitKind::Rammer, {3, 3}, 2);
-        (void)board.add_unit(UnitKind::Engineer, {4, 3}, 2); // Adjacent: rammed East onto dry ground.
-        (void)board.add_unit(UnitKind::Engineer, {2, 2}, 2); // Rammed North from (2, 3): into water.
-        add_water(board, {2, 1});
-        Mission mission = scenario(board);
-        (void)end_turn(mission);
-        CHECK(mission.board().unit(r).pos == Coord{2, 3});
-        CHECK(mission.intent(r) == Intent{Direction::North});
-    }
-
-    SECTION("a blocked ram beats one that only moves, whatever the direction order") {
+    SECTION("a ram that drowns an engineer beats a nearer bump") {
         Board board = flat_board();
         const auto r = board.add_unit(UnitKind::Rammer, {1, 2}, 2);
-        (void)board.add_unit(UnitKind::Engineer, {2, 2}, 2); // East: lands on open ground.
-        (void)board.add_unit(UnitKind::Engineer, {0, 2}, 2); // West: against the edge.
-        Mission mission = scenario(board);
-        (void)end_turn(mission);
-        CHECK(mission.board().unit(r).pos == Coord{1, 2});
-        CHECK(mission.intent(r) == Intent{Direction::West});
-    }
-
-    SECTION("a building behind the engineer blocks the ram") {
-        Board board = flat_board();
-        const auto r = board.add_unit(UnitKind::Rammer, {3, 3}, 2);
-        (void)board.add_unit(UnitKind::Engineer, {3, 4}, 2); // South: open ground.
-        (void)board.add_unit(UnitKind::Engineer, {4, 3}, 2); // East: into the building.
-        add_building(board, {5, 3});
+        (void)board.add_unit(UnitKind::Engineer, {0, 2}, 2); // West, against the edge: 1.
+        (void)board.add_unit(UnitKind::Engineer, {3, 2}, 2); // North from (3, 3), into water: 2.
+        add_water(board, {3, 1});
         Mission mission = scenario(board);
         (void)end_turn(mission);
         CHECK(mission.board().unit(r).pos == Coord{3, 3});
+        CHECK(mission.intent(r) == Intent{Direction::North});
+    }
+
+    SECTION("an engineer rammed into a cottage beats a bump against the edge") {
+        Board board = flat_board();
+        const auto r = board.add_unit(UnitKind::Rammer, {1, 2}, 2);
+        (void)board.add_unit(UnitKind::Engineer, {0, 2}, 2); // West, against the edge: 1.
+        (void)board.add_unit(UnitKind::Engineer, {2, 3}, 2); // South from (2, 2), into the cottage: 2.
+        add_building(board, {2, 4});
+        Mission mission = scenario(board);
+        (void)end_turn(mission);
+        CHECK(mission.board().unit(r).pos == Coord{2, 2});
+        CHECK(mission.intent(r) == Intent{Direction::South});
+    }
+
+    SECTION("shifting an engineer off a guard post next to a cottage counts") {
+        Board board = flat_board();
+        const auto r = board.add_unit(UnitKind::Rammer, {0, 4}, 2);
+        (void)board.add_unit(UnitKind::Engineer, {3, 4}, 2);
+        add_building(board, {3, 5});
+        Mission mission = scenario(board);
+        (void)end_turn(mission);
+        // From (2, 4), East onto open ground: 1, in 2 steps. Ramming the
+        // cottage itself from (2, 5) is also 1, but takes 3.
+        CHECK(mission.board().unit(r).pos == Coord{2, 4});
         CHECK(mission.intent(r) == Intent{Direction::East});
+    }
+
+    SECTION("a crawler rammed into a cottage counts; one on open ground is never rammed") {
+        Board board = flat_board();
+        const auto r = board.add_unit(UnitKind::Rammer, {3, 3}, 2);
+        (void)board.add_unit(UnitKind::Crawler, {4, 3}, 2);
+        (void)board.add_unit(UnitKind::Engineer, {0, 7}, 2);
+        add_building(board, {5, 3});
+        Mission into = scenario(board);
+        (void)end_turn(into);
+        CHECK(into.intent(r) == Intent{Direction::East});
+
+        Board open = board;
+        open.set_tile({5, 3}, Tile{.elevation = 8});
+        Mission nothing = scenario(open);
+        (void)end_turn(nothing);
+        CHECK_FALSE(nothing.intent(r).has_value());
     }
 
     SECTION("equal harm: fewest steps, then row, column and direction") {
         Board board = flat_board();
-        const auto r = board.add_unit(UnitKind::Rammer, {0, 0}, 2);
-        (void)board.add_unit(UnitKind::Engineer, {2, 1}, 2);
+        const auto r = board.add_unit(UnitKind::Rammer, {1, 1}, 2);
+        (void)board.add_unit(UnitKind::Engineer, {0, 1}, 2); // West against the edge, 0 steps.
+        (void)board.add_unit(UnitKind::Engineer, {1, 0}, 2); // North against the edge, 0 steps.
         Mission mission = scenario(board);
         (void)end_turn(mission);
-        // (2, 0) and (1, 1) are both 2 steps away and both rams land on open
-        // ground; row 0 comes first.
-        CHECK(mission.board().unit(r).pos == Coord{2, 0});
-        CHECK(mission.intent(r) == Intent{Direction::South});
+        CHECK(mission.board().unit(r).pos == Coord{1, 1});
+        CHECK(mission.intent(r) == Intent{Direction::North});
     }
 
     SECTION("its own start tile does not block the ram") {
@@ -115,33 +133,20 @@ TEST_CASE("rammer intent follows the ranking key in docs/RULES.md", "[rammer][pl
         (void)board.add_unit(UnitKind::Engineer, {2, 3}, 2);
         Mission mission = scenario(board);
         (void)end_turn(mission);
-        // Every ram lands on open ground: from (2, 4) North lands on (2, 2),
-        // which the Rammer leaves. So no move beats staying and ramming South.
+        // From (2, 4), North would land on (2, 2), which the Rammer leaves:
+        // open ground, no harm. With nothing to harm and no town, it holds.
         CHECK(mission.board().unit(r).pos == Coord{2, 2});
-        CHECK(mission.intent(r) == Intent{Direction::South});
+        CHECK_FALSE(mission.intent(r).has_value());
     }
 
-    SECTION("no engineer in reach: close on the nearest, ignoring buildings, and declare nothing") {
+    SECTION("nothing to harm in reach: march on the town and declare nothing") {
         Board board = flat_board();
         const auto r = board.add_unit(UnitKind::Rammer, {0, 0}, 2);
-        add_building(board, {1, 0});
-        (void)board.add_unit(UnitKind::Engineer, {7, 7}, 2);
+        (void)board.add_unit(UnitKind::Engineer, {7, 0}, 2);
+        add_building(board, {0, 7});
         Mission mission = scenario(board);
         (void)end_turn(mission);
-        // The building walls off (1, 0), so 3 steps reach (0, 3), (1, 2) and
-        // (2, 1), all 11 from (7, 7); the lowest row wins.
-        CHECK(mission.board().unit(r).pos == Coord{2, 1});
-        CHECK_FALSE(mission.intent(r).has_value());
-        CHECK(mission.board().tile({1, 0}).building_hp == 2);
-    }
-
-    SECTION("crawlers are not rammed on purpose") {
-        Board board = flat_board();
-        const auto r = board.add_unit(UnitKind::Rammer, {3, 3}, 2);
-        (void)board.add_unit(UnitKind::Crawler, {4, 3}, 2);
-        (void)board.add_unit(UnitKind::Engineer, {7, 7}, 2);
-        Mission mission = scenario(board);
-        (void)end_turn(mission);
+        CHECK(mission.board().unit(r).pos == Coord{0, 3});
         CHECK_FALSE(mission.intent(r).has_value());
     }
 }
