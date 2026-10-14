@@ -1,5 +1,7 @@
 #include "breakwater/log.hpp"
 
+#include "breakwater/campaign.hpp"
+
 #include <charconv>
 #include <cstddef>
 #include <optional>
@@ -195,9 +197,10 @@ std::expected<MissionLog, LogError> parse_log(std::string_view text) {
     return log;
 }
 
-std::string write_log(const MissionLog& log) {
-    std::string out = "breakwater-log " + std::to_string(kLogVersion) + "\nseed " + std::to_string(log.seed) + "\n";
-    for (const Command& command : log.commands) {
+namespace {
+
+void write_commands(std::string& out, const std::vector<Command>& commands) {
+    for (const Command& command : commands) {
         if (const auto* move = std::get_if<MoveCommand>(&command)) {
             out += "move " + std::to_string(move->engineer) + ' ' + std::to_string(move->to.x) + ' ' +
                    std::to_string(move->to.y) + '\n';
@@ -208,6 +211,122 @@ std::string write_log(const MissionLog& log) {
         } else {
             out += "end\n";
         }
+    }
+}
+
+} // namespace
+
+std::string write_log(const MissionLog& log) {
+    std::string out = "breakwater-log " + std::to_string(kLogVersion) + "\nseed " + std::to_string(log.seed) + "\n";
+    write_commands(out, log.commands);
+    return out;
+}
+
+namespace {
+
+/// Splits off the first line of `text`.
+[[nodiscard]] std::string_view next_line(std::string_view& text) {
+    const auto newline = text.find('\n');
+    const std::string_view line = text.substr(0, newline);
+    text = newline == std::string_view::npos ? std::string_view{} : text.substr(newline + 1);
+    return line;
+}
+
+/// `campaign <k>` with k in range, or the error.
+[[nodiscard]] std::expected<std::uint64_t, std::string> campaign_number(const std::vector<std::string_view>& t) {
+    const auto k = t.size() == 2 && t[0] == "campaign" ? number<std::uint64_t>(t[1]) : std::nullopt;
+    if (!k || *k >= kCampaignCount) {
+        return std::unexpected{"expected 'campaign <0 to " + std::to_string(kCampaignCount - 1) + ">'"};
+    }
+    return *k;
+}
+
+/// A line after the campaign line: a `mission <seed>` that opens the next
+/// mission, or a command for the open one. Returns the error, if any.
+[[nodiscard]] std::optional<std::string> campaign_body_line(const std::vector<std::string_view>& t, CampaignLog& log,
+                                                            const CampaignSeeds& seeds) {
+    if (t[0] != "mission") {
+        if (log.missions.empty()) {
+            return "expected 'mission <seed>' before any command";
+        }
+        auto command = parse_command(t);
+        if (!command) {
+            return std::move(command.error());
+        }
+        log.missions.back().commands.push_back(*command);
+        return std::nullopt;
+    }
+    const auto seed = t.size() == 2 ? number<std::uint64_t>(t[1]) : std::nullopt;
+    if (!seed) {
+        return "expected 'mission <seed>'";
+    }
+    if (log.missions.size() == seeds.size()) {
+        return "a campaign has " + std::to_string(seeds.size()) + " missions";
+    }
+    if (const auto expected = seeds.at(log.missions.size()); *seed != expected) {
+        return "mission " + std::to_string(log.missions.size() + 1) + " of campaign " + std::to_string(log.campaign) +
+               " is seed " + std::to_string(expected);
+    }
+    log.missions.push_back(MissionLog{.seed = *seed, .commands = {}});
+    return std::nullopt;
+}
+
+} // namespace
+
+std::expected<CampaignLog, LogError> parse_campaign_log(std::string_view text) {
+    enum class Expect : std::uint8_t { Header, Campaign, Missions };
+    Expect expect = Expect::Header;
+    CampaignLog log;
+    CampaignSeeds seeds{};
+    int line_number = 0;
+
+    while (!text.empty()) {
+        const auto t = tokens_of(next_line(text));
+        ++line_number;
+        if (t.empty()) {
+            continue;
+        }
+        std::optional<std::string> error;
+        switch (expect) {
+        case Expect::Header:
+            if (t.size() != 2 || t[0] != "breakwater-campaign") {
+                error = "expected 'breakwater-campaign <version>'";
+            } else if (number<int>(t[1]) != kCampaignLogVersion) {
+                error = "unsupported campaign log version '" + std::string{t[1]} + "'";
+            }
+            expect = Expect::Campaign;
+            break;
+        case Expect::Campaign:
+            if (const auto k = campaign_number(t); k) {
+                log.campaign = *k;
+                seeds = campaign_seeds(*k);
+            } else {
+                error = k.error();
+            }
+            expect = Expect::Missions;
+            break;
+        case Expect::Missions:
+            error = campaign_body_line(t, log, seeds);
+            break;
+        }
+        if (error) {
+            return std::unexpected{LogError{.line = line_number, .message = std::move(*error)}};
+        }
+    }
+    if (expect != Expect::Missions) {
+        return std::unexpected{LogError{.line = line_number,
+                                        .message = expect == Expect::Header ? "missing 'breakwater-campaign' header"
+                                                                            : "missing 'campaign' line"}};
+    }
+    return log;
+}
+
+std::string write_campaign_log(const CampaignLog& log) {
+    std::string out = "breakwater-campaign " + std::to_string(kCampaignLogVersion) + "\ncampaign " +
+                      std::to_string(log.campaign) + "\n";
+    for (const MissionLog& mission : log.missions) {
+        out += "mission " + std::to_string(mission.seed) + "\n";
+        write_commands(out, mission.commands);
     }
     return out;
 }

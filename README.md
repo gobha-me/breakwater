@@ -20,6 +20,7 @@ The first configure fetches Catch2 v3.16.0 and godot-cpp 10.0.0-stable.
 ```sh
 tools/play.sh            # build what's missing and play (default mission 20)
 tools/play.sh 42         # a specific mission; unproven seeds move on to the next
+tools/play.sh --campaign 3  # campaign 3: five missions in a row, scored
 tools/export.sh          # standalone Linux release build in build/export/
 tools/play.sh --exported # play the exported build
 ```
@@ -29,6 +30,11 @@ or a teal unit two tiles away to harpoon it one tile closer (hover first to
 preview the outcome). Keys: WASD shove, Shift+WASD pull, Space end turn,
 Z undo a move, Tab next engineer, R restart, N next mission, F5 save a replay,
 M sound on or off, - and = volume.
+
+Campaigns: C starts the campaign this mission belongs to (five missions in a
+row, scored), N moves on after a win, R retries a mission, F5 saves the whole
+campaign, Shift+C goes back to free play. `tools/play.sh --campaign 3` starts
+campaign 3.
 
 ## Build
 

@@ -1,0 +1,137 @@
+# Campaign 0 (seeds 0-4), every mission played with its solver witness (bw_solve --campaign 0).
+# Ends: all five won, score 1210.
+breakwater-campaign 1
+campaign 0
+mission 0
+move 1 1 3
+shove 1 W
+move 0 2 3
+move 2 5 2
+pull 2 W
+end
+move 0 1 4
+move 2 4 3
+pull 0 E
+move 1 0 3
+shove 2 W
+end
+move 0 2 3
+pull 0 W
+move 1 2 4
+pull 1 S
+move 2 4 5
+end
+shove 2 W
+move 1 1 4
+shove 1 S
+end
+move 1 1 5
+pull 1 E
+move 2 4 7
+shove 2 W
+end
+mission 1
+move 0 3 3
+move 1 5 3
+pull 0 E
+shove 1 N
+move 2 7 2
+end
+move 1 3 4
+move 2 6 3
+move 0 2 3
+shove 2 W
+end
+shove 1 E
+move 0 3 3
+move 2 5 3
+shove 2 S
+shove 0 E
+end
+move 1 3 5
+move 0 3 4
+shove 0 E
+shove 1 S
+shove 2 S
+end
+shove 1 S
+end
+mission 2
+move 0 2 3
+move 1 3 3
+shove 0 E
+pull 1 W
+move 2 0 3
+shove 2 E
+end
+move 0 3 2
+move 1 5 4
+move 2 1 2
+pull 2 S
+end
+move 0 3 4
+pull 0 W
+move 1 5 6
+pull 1 E
+move 2 1 4
+end
+move 0 3 5
+shove 0 W
+pull 1 E
+move 2 2 4
+shove 2 S
+end
+move 0 2 6
+shove 0 N
+pull 1 E
+end
+mission 3
+move 0 7 2
+move 1 1 3
+move 2 0 2
+end
+move 0 6 3
+move 2 0 3
+pull 0 W
+move 1 3 3
+pull 1 E
+end
+move 1 2 4
+move 0 6 4
+pull 0 W
+move 2 0 4
+shove 1 E
+end
+move 0 7 5
+move 1 2 5
+move 2 0 6
+end
+move 0 6 5
+pull 0 W
+move 1 2 4
+pull 1 E
+move 2 1 6
+end
+mission 4
+move 0 3 2
+pull 0 E
+move 1 5 3
+pull 1 N
+move 2 1 2
+end
+pull 0 E
+move 2 0 3
+shove 1 S
+end
+move 0 4 2
+move 1 5 4
+pull 1 E
+move 2 0 4
+end
+pull 1 E
+move 2 0 6
+end
+pull 1 E
+move 2 1 6
+pull 2 E
+end

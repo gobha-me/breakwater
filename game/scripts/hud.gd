@@ -1,6 +1,6 @@
 extends CanvasLayer
-## Turn, tide, the town, each engineer's state, the last message, and the
-## ending.
+## The campaign, turn, tide, the town, each engineer's state, the last
+## message, and the ending.
 
 const ACTION_NAMES := {
 	BreakwaterMission.ACTION_READY: "ready",
@@ -11,6 +11,7 @@ const ACTION_NAMES := {
 ## The last enemy-phase step announced: for the input test.
 var last_step := ""
 
+var _campaign: Label
 var _status: Label
 var _town: Label
 var _engineers: Label
@@ -32,6 +33,9 @@ func _ready() -> void:
 	add_child(panel)
 	var column := VBoxContainer.new()
 	panel.add_child(column)
+	_campaign = _label(column, 18)
+	_campaign.modulate = Color(1.0, 0.85, 0.3)
+	_campaign.visible = false
 	_status = _label(column, 22)
 	_town = _label(column, 18)
 	_engineers = _label(column, 18)
@@ -48,7 +52,7 @@ func _ready() -> void:
 	_hints.text = (
 		"Click an engineer   ·   green: move   ·   orange or WASD: shove   ·   teal or Shift+WASD: pull"
 		+ "\nSpace: end turn   ·   Z undo move   ·   Tab / Esc   ·   R restart   ·   N next   ·   F5 save"
-		+ "   ·   M sound"
+		+ "   ·   C campaign   ·   M sound"
 	)
 	add_child(_hints)
 
@@ -74,7 +78,10 @@ func _ready() -> void:
 	add_child(_banner)
 
 
-func sync(mission: BreakwaterMission) -> void:
+## `campaign` is the campaign's status line, or "" outside a campaign.
+func sync(mission: BreakwaterMission, campaign := "") -> void:
+	_campaign.text = campaign
+	_campaign.visible = not campaign.is_empty()
 	var tide := mission.get_tide()
 	var over := mission.get_outcome() != BreakwaterMission.OUTCOME_IN_PROGRESS
 	_status.text = (

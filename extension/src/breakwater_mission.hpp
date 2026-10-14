@@ -63,6 +63,20 @@ public:
     [[nodiscard]] static bool is_offered(int64_t seed);
     /// The next offered seed after `seed`, wrapping.
     [[nodiscard]] static int64_t next_offered(int64_t seed);
+    /// Campaigns: how many there are, and the seeds of campaign `k` (empty
+    /// when out of range).
+    [[nodiscard]] static int64_t get_campaign_count();
+    [[nodiscard]] static godot::PackedInt64Array campaign_seeds(int64_t k);
+    /// The campaign whose block of seeds holds `seed` (0 for one out of range).
+    [[nodiscard]] static int64_t campaign_of(int64_t seed);
+    /// The campaign log for campaign `k` from its missions' logs, in order:
+    /// {error, text}. The core checks the seeds and replays it.
+    [[nodiscard]] static godot::Dictionary campaign_log(int64_t k, const godot::PackedStringArray& mission_logs);
+    /// Parses a campaign log without replaying it: {error, campaign,
+    /// missions: [{seed, commands}]}, commands shaped as parse_log() returns.
+    [[nodiscard]] static godot::Dictionary parse_campaign_log(const godot::String& text);
+    /// What this mission adds to a campaign's score (core/campaign.hpp).
+    [[nodiscard]] int64_t get_score() const;
     /// Replays a mission log from its text. Returns "" or the error: a parse
     /// error with its line, or the first refused command. Events from the
     /// replay are dropped: the scene builds the position from queries.

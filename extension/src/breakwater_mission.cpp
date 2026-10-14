@@ -1,5 +1,6 @@
 #include "breakwater_mission.hpp"
 
+#include "breakwater/campaign.hpp"
 #include "breakwater/seeds.hpp"
 
 #include <godot_cpp/core/class_db.hpp>
@@ -11,6 +12,7 @@
 #include <format>
 #include <limits>
 #include <string>
+#include <utility>
 #include <variant>
 
 namespace breakwater::gd {
@@ -103,42 +105,123 @@ godot::String BreakwaterMission::load_log(const godot::String& text) {
     return {};
 }
 
+namespace {
+
+/// Commands as [{verb, engineer, x, y, dir}], unused fields 0.
+godot::Array commands_of(const std::vector<Command>& list) {
+    godot::Array commands;
+    for (const Command& command : list) {
+        godot::Dictionary d;
+        d["engineer"] = int64_t{0};
+        d["x"] = 0;
+        d["y"] = 0;
+        d["dir"] = int64_t{0};
+        if (const auto* move = std::get_if<MoveCommand>(&command)) {
+            d["verb"] = "move";
+            d["engineer"] = static_cast<int64_t>(move->engineer);
+            d["x"] = move->to.x;
+            d["y"] = move->to.y;
+        } else if (const auto* shove = std::get_if<ShoveCommand>(&command)) {
+            d["verb"] = "shove";
+            d["engineer"] = static_cast<int64_t>(shove->engineer);
+            d["dir"] = static_cast<int64_t>(shove->dir);
+        } else if (const auto* pull = std::get_if<PullCommand>(&command)) {
+            d["verb"] = "pull";
+            d["engineer"] = static_cast<int64_t>(pull->engineer);
+            d["dir"] = static_cast<int64_t>(pull->dir);
+        } else {
+            d["verb"] = "end";
+        }
+        commands.push_back(d);
+    }
+    return commands;
+}
+
+} // namespace
+
 godot::Dictionary BreakwaterMission::parse_log(const godot::String& text) {
     godot::Dictionary out;
-    godot::Array commands;
     const auto parsed = breakwater::parse_log(to_std(text));
     out["error"] =
         parsed ? godot::String{} : to_godot(std::format("line {}: {}", parsed.error().line, parsed.error().message));
     out["seed"] = parsed ? std::bit_cast<int64_t>(parsed->seed) : int64_t{0};
-    if (parsed) {
-        for (const Command& command : parsed->commands) {
-            godot::Dictionary d;
-            d["engineer"] = int64_t{0};
-            d["x"] = 0;
-            d["y"] = 0;
-            d["dir"] = int64_t{0};
-            if (const auto* move = std::get_if<MoveCommand>(&command)) {
-                d["verb"] = "move";
-                d["engineer"] = static_cast<int64_t>(move->engineer);
-                d["x"] = move->to.x;
-                d["y"] = move->to.y;
-            } else if (const auto* shove = std::get_if<ShoveCommand>(&command)) {
-                d["verb"] = "shove";
-                d["engineer"] = static_cast<int64_t>(shove->engineer);
-                d["dir"] = static_cast<int64_t>(shove->dir);
-            } else if (const auto* pull = std::get_if<PullCommand>(&command)) {
-                d["verb"] = "pull";
-                d["engineer"] = static_cast<int64_t>(pull->engineer);
-                d["dir"] = static_cast<int64_t>(pull->dir);
-            } else {
-                d["verb"] = "end";
-            }
-            commands.push_back(d);
-        }
-    }
-    out["commands"] = commands;
+    out["commands"] = parsed ? commands_of(parsed->commands) : godot::Array{};
     return out;
 }
+
+int64_t BreakwaterMission::get_campaign_count() { return static_cast<int64_t>(breakwater::kCampaignCount); }
+
+godot::PackedInt64Array BreakwaterMission::campaign_seeds(int64_t k) {
+    godot::PackedInt64Array out;
+    if (k < 0 || std::cmp_greater_equal(k, breakwater::kCampaignCount)) {
+        return out;
+    }
+    for (const std::uint64_t seed : breakwater::campaign_seeds(static_cast<std::uint64_t>(k))) {
+        out.push_back(static_cast<int64_t>(seed));
+    }
+    return out;
+}
+
+int64_t BreakwaterMission::campaign_of(int64_t seed) {
+    if (seed < 0 || std::cmp_greater_equal(seed, breakwater::kOfferedSeeds)) {
+        return 0;
+    }
+    return seed / breakwater::kCampaignLength;
+}
+
+godot::Dictionary BreakwaterMission::campaign_log(int64_t k, const godot::PackedStringArray& mission_logs) {
+    godot::Dictionary out;
+    out["error"] = godot::String{};
+    out["text"] = godot::String{};
+    if (k < 0 || std::cmp_greater_equal(k, breakwater::kCampaignCount)) {
+        out["error"] = "no such campaign";
+        return out;
+    }
+    breakwater::CampaignLog log{.campaign = static_cast<std::uint64_t>(k), .missions = {}};
+    for (int64_t i = 0; i < mission_logs.size(); ++i) {
+        auto mission = breakwater::parse_log(to_std(mission_logs[i]));
+        if (!mission) {
+            out["error"] =
+                to_godot(std::format("mission {}: line {}: {}", i + 1, mission.error().line, mission.error().message));
+            return out;
+        }
+        log.missions.push_back(std::move(*mission));
+    }
+    // Through the text form, so the seeds are checked exactly as on load.
+    const std::string text = breakwater::write_campaign_log(log);
+    const auto checked = breakwater::parse_campaign_log(text);
+    if (!checked) {
+        out["error"] = to_godot(checked.error().message);
+        return out;
+    }
+    if (const auto replayed = breakwater::replay_campaign(*checked); !replayed) {
+        out["error"] = to_godot(replayed.error());
+        return out;
+    }
+    out["text"] = to_godot(text);
+    return out;
+}
+
+godot::Dictionary BreakwaterMission::parse_campaign_log(const godot::String& text) {
+    godot::Dictionary out;
+    godot::Array missions;
+    const auto parsed = breakwater::parse_campaign_log(to_std(text));
+    out["error"] =
+        parsed ? godot::String{} : to_godot(std::format("line {}: {}", parsed.error().line, parsed.error().message));
+    out["campaign"] = parsed ? static_cast<int64_t>(parsed->campaign) : int64_t{0};
+    if (parsed) {
+        for (const auto& mission : parsed->missions) {
+            godot::Dictionary d;
+            d["seed"] = static_cast<int64_t>(mission.seed);
+            d["commands"] = commands_of(mission.commands);
+            missions.push_back(d);
+        }
+    }
+    out["missions"] = missions;
+    return out;
+}
+
+int64_t BreakwaterMission::get_score() const { return breakwater::mission_score(mission_); }
 
 godot::String BreakwaterMission::apply(const Command& command) {
     Mission before = mission_;
@@ -336,6 +419,16 @@ void BreakwaterMission::_bind_methods() {
     ClassDB::bind_static_method("BreakwaterMission", D_METHOD("next_offered", "seed"),
                                 &BreakwaterMission::next_offered);
     ClassDB::bind_static_method("BreakwaterMission", D_METHOD("parse_log", "text"), &BreakwaterMission::parse_log);
+    ClassDB::bind_static_method("BreakwaterMission", D_METHOD("get_campaign_count"),
+                                &BreakwaterMission::get_campaign_count);
+    ClassDB::bind_static_method("BreakwaterMission", D_METHOD("campaign_seeds", "k"),
+                                &BreakwaterMission::campaign_seeds);
+    ClassDB::bind_static_method("BreakwaterMission", D_METHOD("campaign_of", "seed"), &BreakwaterMission::campaign_of);
+    ClassDB::bind_static_method("BreakwaterMission", D_METHOD("campaign_log", "k", "mission_logs"),
+                                &BreakwaterMission::campaign_log);
+    ClassDB::bind_static_method("BreakwaterMission", D_METHOD("parse_campaign_log", "text"),
+                                &BreakwaterMission::parse_campaign_log);
+    ClassDB::bind_method(D_METHOD("get_score"), &BreakwaterMission::get_score);
     ClassDB::bind_method(D_METHOD("preview_shove", "engineer", "dir"), &BreakwaterMission::preview_shove);
     ClassDB::bind_method(D_METHOD("preview_pull", "engineer", "dir"), &BreakwaterMission::preview_pull);
     ClassDB::bind_method(D_METHOD("move", "engineer", "x", "y"), &BreakwaterMission::move);

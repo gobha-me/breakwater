@@ -3,6 +3,9 @@
 //   bw_solve <seed> [--budget N] [--no-shove]
 //       The verdict, the node count, and for a winnable mission its witness:
 //       a log that bw_replay replays to a win.
+//   bw_solve --campaign K
+//       A winning campaign log for campaign K: every mission's witness at
+//       kProofBudget, replayed as a campaign before it is printed.
 //   bw_solve --check-offered
 //       Re-runs the proof sweep over the offered seeds at kProofBudget and
 //       fails unless the seeds it cannot prove are exactly kRejectedSeeds,
@@ -15,6 +18,7 @@
 //
 // Exit status: 0 done, 1 a witness failed to win, 2 bad usage.
 
+#include "breakwater/campaign.hpp"
 #include "breakwater/log.hpp"
 #include "breakwater/mission.hpp"
 #include "breakwater/seeds.hpp"
@@ -162,16 +166,52 @@ int check_offered() {
     return mismatches == 0 ? 0 : 1;
 }
 
+int solve_campaign(std::uint64_t k) {
+    if (k >= breakwater::kCampaignCount) {
+        return 2;
+    }
+    breakwater::CampaignLog log{.campaign = k, .missions = {}};
+    for (const std::uint64_t seed : breakwater::campaign_seeds(k)) {
+        const auto result = breakwater::solve(Mission::generate(seed), {.node_budget = breakwater::kProofBudget});
+        if (result.verdict != Verdict::Winnable) {
+            std::cerr << std::format("seed {}: {}, though it is offered\n", seed, verdict_name(result.verdict));
+            return 1;
+        }
+        log.missions.push_back({.seed = seed, .commands = result.witness});
+    }
+    const auto replayed = breakwater::replay_campaign(log);
+    if (!replayed || !replayed->finished || replayed->missions.back().outcome() != breakwater::Outcome::Won) {
+        std::cerr << "the campaign's witnesses do not win it\n";
+        return 1;
+    }
+    std::cout << std::format("# campaign {}: won, score {}\n", k, replayed->score)
+              << breakwater::write_campaign_log(log);
+    return 0;
+}
+
+/// The modes that are the whole command line, taking no other options; empty
+/// for anything else.
+std::optional<int> whole_command(std::span<char*> args) {
+    if (args.size() == 2 && std::string_view{args[1]} == "--check-offered") {
+        return check_offered();
+    }
+    if (args.size() == 3 && std::string_view{args[1]} == "--campaign") {
+        const auto k = number(args[2]);
+        return k ? solve_campaign(*k) : 2;
+    }
+    return std::nullopt;
+}
+
 int run(std::span<char*> args) {
     SolveOptions options;
     std::optional<std::uint64_t> seed;
     std::optional<std::pair<std::uint64_t, std::uint64_t>> range;
+    if (const auto status = whole_command(args)) {
+        return *status;
+    }
     for (std::size_t i = 1; i < args.size(); ++i) {
         const std::string_view arg = args[i];
         const bool has_value = i + 1 < args.size();
-        if (arg == "--check-offered") {
-            return check_offered();
-        }
         if (arg == "--budget" && has_value) {
             const auto v = number(args[++i]);
             if (!v) {
@@ -210,7 +250,8 @@ int main(int argc, char** argv) {
     try {
         const int status = run(std::span(argv, static_cast<std::size_t>(argc)));
         if (status == 2) {
-            std::cerr << "usage: bw_solve <seed> | --range A-B | --check-offered  [--budget N] [--no-shove]\n";
+            std::cerr << "usage: bw_solve <seed> | --range A-B | --campaign K | --check-offered"
+                         "  [--budget N] [--no-shove]\n";
         }
         return status;
     } catch (const std::exception& e) {

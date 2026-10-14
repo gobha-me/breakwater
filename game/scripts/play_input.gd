@@ -17,7 +17,9 @@ extends Node3D
 ##   Z                      undo the last move (until a shove or end of turn)
 ##   H / Shift+H            dismiss the current hint / no more hints
 ##   M, - / =               sound on or off, volume down / up
-##   R / N                  restart this seed / next seed
+##   R / N                  restart this seed / next seed (in a campaign: next
+##                          mission once won, next campaign once over)
+##   C / Shift+C            start this seed's campaign / back to free play
 ##   F5                     save the game as a replayable log
 
 ## Emitted with the command's verb after the mission accepts it.
@@ -254,6 +256,11 @@ func _unhandled_input(event: InputEvent) -> void:
 				main.restart(main.mission.get_seed())
 			KEY_N:
 				main.next_mission()
+			KEY_C:
+				if event.shift_pressed:
+					main.leave_campaign()
+				else:
+					main.start_campaign(BreakwaterMission.campaign_of(main.mission.get_seed()))
 			KEY_F5:
 				main.save_log()
 

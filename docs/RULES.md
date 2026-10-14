@@ -286,6 +286,41 @@ cannot be lost by losing them. Neither can be created during a mission, so a
 generated one always has three of each. A razed building leaves no trace on
 the board, so the town's starting size is part of the state hash.
 
+## Campaign
+
+A campaign is **five offered missions in a row**:
+
+- **Which missions:** campaign `k` (0 to 199) plays the first five offered
+  seeds from `5k`. Campaign 0 is seeds 0-4. Campaign 7 is seeds 36-40, because
+  35 is rejected.
+- **Moving on:** win a mission to go on to the next one. Retrying the current
+  mission is allowed, and only its last attempt counts.
+- **The end:** a lost mission ends the campaign, and so does winning the fifth.
+
+The score is the sum of the missions' scores:
+
+| Mission | Score |
+|---|---|
+| Won | 100, plus 50 per cottage standing, plus 25 per engineer alive, plus 5 per engineer HP left |
+| Lost | 10 per turn completed before the loss |
+| In progress | 0 |
+
+A clean win (3 cottages, 3 engineers at full HP) scores 430. A scrape (one
+cottage lost, one engineer left on 2 HP) scores 235.
+
+**Nothing carries over except the run and the score.** Carrying engineer HP,
+or a budget for a tool, would change the rules a mission is played under. The
+solver proves each mission under the fresh rules, and every offered mission
+must stay provably winnable (criterion 4), so neither carries.
+
+**Log of logs:** a campaign is saved as a `breakwater-campaign 1` file, with
+`campaign k` followed by each mission's commands under its own `mission <seed>`
+line.
+
+- Parsing is strict about the seeds: they must be the campaign's, in order.
+- Replaying (`bw_replay`, `replay_campaign()`) refuses a mission that follows
+  one that was not won.
+
 ## RNG streams
 
 Stream ids are part of the save and replay format: append, never renumber.
