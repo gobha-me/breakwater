@@ -160,43 +160,90 @@ The numbers above are tuned with the solver (`bw_solve`), not by feel. The
 question is whether the game's one verb is necessary: a mission a player can
 win by walking inland, without ever shoving, fails pillar 2.
 
-| Rules | Solver, with shoves (1M nodes) | Solver, **no** shoves (1M nodes) | Retreat policy, no shoves | Idle |
+### How it is measured
+
+Two sweeps over seeds 0-999. Every "winnable" verdict comes with a witness
+that is replayed in-process, so it is a certificate. "Unwinnable" comes only
+from a complete search. "Unproven" means the budget ran out and says nothing
+either way.
+
+- **With shoves, at the proof budget** (`kProofBudget`, 2M nodes): the share
+  of missions that can be offered.
+- **Without shoves, at 10M nodes**
+  (`bw_solve --range 0-999 --no-shove --budget 10000000`, about 15 minutes on
+  16 cores):
+  - the winnable count is a **lower bound** on missions that need no shove;
+  - the unwinnable count is a lower bound on missions that **need** one;
+  - the true share lies between the two.
+
+At 1M nodes the shove-free sweep is too loose to compare rule sets. Between
+two of them, 108 seeds flipped one way and 66 the other. #71 read its 1M lower
+bound (175) as "under 20%". The same rules at 10M certify at least 559. A lower
+bound never establishes an upper limit (#96).
+
+### Results
+
+| Rules | With shoves | **No** shoves, 10M | Retreat policy | Idle |
 |---|---|---|---|---|
-| Bootstrap: crawlers prefer engineers, strike 1, reach 2 | 1000 / 1000 winnable | 1000 / 1000 winnable | **841** / 1000 won | 0 |
-| #39: crawlers prefer buildings, strike 2, reach 3 | 993 winnable, 7 unproven | ≥ 464 winnable, 536 unproven | 10 / 1000 won | 0 |
-| #71: crawlers march on the town, no luring | **981** winnable, 19 unproven | **≥ 175** winnable, 1 unwinnable, 824 unproven | 10 / 1000 won | 0 |
+| Bootstrap: crawlers prefer engineers, strike 1, reach 2 | 1000 / 1000 (1M) | 1000 winnable (1M) | 841 won | 0 |
+| #39: crawlers prefer buildings, strike 2, reach 3 | 993 (1M) | ≥ 464 winnable (1M only) | 10 won | 0 |
+| #71: crawlers march on the town, no luring | 981 (1M) | **≥ 559 winnable**, 50 unwinnable, 391 unproven | 10 won | 0 |
+| **#96: the town falls when two of its three cottages are razed** | **975** (2M) | **≥ 121 winnable**, **383 unwinnable**, 496 unproven | **0** won | 0 |
 
-How to read the shove-free column: a "winnable" verdict always comes with a
-witness, so 175 is a **certified lower bound** on missions a player could win
-without ever shoving. An "unproven" verdict says nothing either way. Proving
-shove-free *losses* for most seeds would need an exhaustive search of every
-joint placement of three engineers over five turns, which is out of reach at
-this budget. Shortcuts that ignore engineers are unsound, because engineers
-block crawler paths and attack tiles.
+Under #96, a random sample of 48 of the 496 unproven seeds was re-run at 50M
+nodes: 38 came out unwinnable, 7 winnable and 3 still unproven. Scaled up, that
+puts the true shove-free share near **19%**, with a sampling interval of
+roughly 15-29%. That is an estimate. The certified statements are these:
 
-Under the bootstrap rules the solver could win all 1000 seeds without a single
-shove. Under #39, strikes went for the town and walking inland stopped
-working. But engineers could still bait crawlers away from the last cottage
-and dodge every strike, so at least 46% of seeds stayed winnable without a
-shove. Marching crawlers end the baiting; a shove that turns or pushes a
-crawler back is now the main way to save a building.
+- at least 12.1% of missions are winnable without a shove;
+- at least 38.3% cannot be won without one.
 
-Seeds the solver cannot prove are rejected at generation, so every mission
-offered is winnable.
+Under #71, at least 55.9% were winnable without a shove, and 5% were proven
+to need one.
+
+### What the levers did
+
+- **Bootstrap to #39:** the solver won all 1000 seeds without a single shove.
+  Strikes then went for the town, and walking inland stopped working.
+- **#39 to #71:** engineers could still bait crawlers away from the last
+  cottage. Marching crawlers ended that.
+- **#71 to #96:** passive play kept winning anyway. Three 2-HP cottages need
+  three landed strikes, crawlers spend most of the five turns walking in from
+  the waterline, and engineers on the high ground body-block approach tiles.
+  Two of three cottages give the defence no slack for a crawler that gets
+  through, so a crawler that will land has to be turned or pushed back.
+- **Measured and not adopted (#96):** two more crawlers (spawns 2, 2, 2, 1).
+  That gave 960 with shoves and 132 shove-free at 1M, against 175: a small
+  effect for a lot more difficulty.
+- **Measured for #72 and parked:** a Rammer, a crawler whose strike pushes,
+  added as a sixth creature. It left the shove-free share unchanged (≥ 566 and
+  ≥ 556 at 10M under #71's rules).
+
+Seeds the solver cannot prove at the proof budget are rejected at generation
+(`kRejectedSeeds`), so every mission offered is winnable. At 10M nodes, 997 of
+1000 are: the proof budget, not the rules, decides most rejections.
 
 ## Outcome
 
 - **Loss**, evaluated after every command and every enemy-phase step: every
-  engineer is dead, or every building is razed. The mission ends on the spot:
+  engineer is dead, or **the town has fallen**, which happens when two of its
+  three cottages are razed (`kTownFallsAfter`). The mission ends on the spot:
   the rest of the enemy phase does not run, and the turn does not advance.
 - **Win**: the enemy phase of turn 5 completes without a loss. The turn stays
   at 5; no sixth turn is announced.
 - Once the mission has ended, every command is rejected and changes nothing,
   and no crawler holds an intent.
 
-A hand-built scenario with no buildings cannot be lost by razing them, and one
-with no engineers cannot be lost by losing them. Neither can be created during
-a mission, so this never applies to a generated one, which always has both.
+Why two and not three: with three cottages to lose, one crawler that got
+through cost nothing, and passive play won at least 56% of missions (#96).
+Losing one cottage is survivable; losing a second is not. So each strike that
+will land on a cottage asks whether this is the one to let through.
+
+A hand-built scenario with fewer buildings falls when all of them are razed,
+and one with no buildings cannot be lost by razing them. One with no engineers
+cannot be lost by losing them. Neither can be created during a mission, so a
+generated one always has three of each. A razed building leaves no trace on
+the board, so the town's starting size is part of the state hash.
 
 ## RNG streams
 

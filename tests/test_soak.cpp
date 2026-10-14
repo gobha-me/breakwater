@@ -1,6 +1,8 @@
 #include "breakwater/log.hpp"
 #include "breakwater/mission.hpp"
 #include "breakwater/rng.hpp"
+#include "breakwater/seeds.hpp"
+#include "breakwater/solver.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -57,6 +59,12 @@ std::string violated_invariant(const Mission& mission) {
                 return "elevation changed";
             }
         }
+    }
+    if (mission.town_size() != 3 || mission.razed() < 0 || mission.razed() > mission.town_size()) {
+        return "the town's size or razed count is off";
+    }
+    if (mission.outcome() != Outcome::Lost && mission.razed() >= mission.town_falls_after()) {
+        return "the town fell but the mission was not lost";
     }
     std::set<std::pair<int, int>> occupied;
     for (UnitId id = 0; id < board.unit_count(); ++id) {
@@ -209,9 +217,37 @@ TEST_CASE("a thousand missions of random commands break no invariant", "[soak][r
     const auto stats = soak(0, 1'000);
     CHECK(stats.missions == 1'000);
     CHECK(stats.refusals > 0);
-    CHECK(stats.won > 0); // Random play does win sometimes: the invariants saw both endings.
     WARN("soak: " << stats.missions << " missions, " << stats.commands << " commands, " << stats.refusals
                   << " refusals, " << stats.won << " won");
+}
+
+// Random play almost never wins once the town falls after two buildings, so
+// the winning ending is covered here: solver witnesses, played through the
+// same preview and invariant checks as the soak, all the way to a win.
+TEST_CASE("solver witnesses keep every invariant through to a win", "[soak][win]") {
+    // Seeds 0-9 are test_solver.cpp's; three more are enough to see the ending.
+    int won = 0;
+    for (std::uint64_t seed = 10; won < 3; ++seed) {
+        if (!breakwater::is_offered(seed)) {
+            continue;
+        }
+        Mission mission = Mission::generate(seed);
+        const auto result = breakwater::solve(mission, {.node_budget = breakwater::kProofBudget});
+        REQUIRE(result.verdict == breakwater::Verdict::Winnable);
+        for (const Command& command : result.witness) {
+            auto preview = mission.preview(command);
+            REQUIRE(preview);
+            (void)mission.take_events();
+            REQUIRE(mission.apply(command));
+            REQUIRE(preview->state_hash() == mission.state_hash());
+            REQUIRE(preview->take_events() == mission.take_events());
+            const auto broken = violated_invariant(mission);
+            INFO("seed " << seed << ": " << broken);
+            REQUIRE(broken.empty());
+        }
+        REQUIRE(mission.outcome() == Outcome::Won);
+        ++won;
+    }
 }
 
 // Hidden: `breakwater_tests "[.long-soak]"`, run in the sanitizer build.

@@ -25,9 +25,11 @@ run=("${display[@]}" "${GODOT_BIN:-godot}" --path game --resolution 1280x720 "${
 
 # One retry: a compositor occasionally fails to present the first window.
 status=0
+log="$(mktemp)"
+trap 'rm -f "$log"' EXIT
 for attempt in 1 2; do
     status=0
-    timeout "$limit" "${run[@]}" || status=$?
+    timeout "$limit" "${run[@]}" > >(tee "$log") 2>&1 || status=$?
     [[ $status -eq 124 && $attempt -eq 1 ]] && { echo "capture: timed out, retrying once" >&2; continue; }
     break
 done
@@ -36,4 +38,9 @@ if [[ $status -eq 124 ]]; then
     exit 1
 fi
 [[ $status -eq 0 && -s "$out" ]] || { echo "capture: failed (exit $status)" >&2; exit 1; }
+# A script that fails to load still leaves a frame to save: an empty scene.
+if grep -qE 'SCRIPT ERROR|^ERROR' "$log"; then
+    echo "capture: the game reported errors; the image does not show the scene" >&2
+    exit 1
+fi
 echo "capture: $out"

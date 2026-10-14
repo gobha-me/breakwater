@@ -1,5 +1,5 @@
 breakwater-log 1
-# The solver's witness (bw_solve 20): twelve shoves turn the strikes.
+# The solver's witness (bw_solve 20): eight shoves turn the strikes.
 # Ends: won on turn 5.
 seed 20
 move 0 1 3
@@ -16,21 +16,15 @@ end
 move 1 3 4
 move 0 0 5
 move 2 1 5
-shove 2 E
-shove 0 E
-shove 1 S
-end
-move 1 3 6
-move 0 1 6
-move 2 2 6
-shove 2 E
-shove 1 N
 shove 0 E
 end
-move 1 5 5
+shove 0 E
+move 2 4 5
+shove 2 N
+move 1 4 4
 shove 1 E
-move 2 4 6
-move 0 3 6
-shove 0 E
-shove 2 E
+end
+shove 1 E
+move 0 1 4
+move 2 2 5
 end

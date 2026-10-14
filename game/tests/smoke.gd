@@ -70,14 +70,14 @@ func _run_mission_checks() -> void:
 	_check(
 		(
 			BreakwaterMission.is_offered(20)
-			and not BreakwaterMission.is_offered(172)
+			and not BreakwaterMission.is_offered(162)
 			and not BreakwaterMission.is_offered(1000)
 			and not BreakwaterMission.is_offered(-1)
 		),
 		"offered seeds: proven ones in 0-999 only"
 	)
 	_check(
-		BreakwaterMission.next_offered(171) == 173 and BreakwaterMission.next_offered(999) == 1,
+		BreakwaterMission.next_offered(161) == 163 and BreakwaterMission.next_offered(999) == 0,
 		"next offered seed skips rejected ones and wraps"
 	)
 	_run_undo_checks()

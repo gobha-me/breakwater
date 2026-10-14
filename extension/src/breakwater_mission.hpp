@@ -95,6 +95,9 @@ public:
     [[nodiscard]] int64_t get_unit_max_hp() const;
     [[nodiscard]] int64_t get_building_max_hp() const;
     [[nodiscard]] int64_t get_tide() const;
+    [[nodiscard]] int64_t get_town_size() const;
+    [[nodiscard]] int64_t get_razed() const;
+    [[nodiscard]] int64_t get_town_falls_after() const;
     [[nodiscard]] int64_t get_outcome() const;
     [[nodiscard]] int64_t get_elevation(int64_t x, int64_t y) const;
     [[nodiscard]] int64_t get_building_hp(int64_t x, int64_t y) const;

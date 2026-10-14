@@ -195,6 +195,12 @@ int64_t BreakwaterMission::get_turn() const { return mission_.turn(); }
 
 int64_t BreakwaterMission::get_tide() const { return mission_.board().tide(); }
 
+int64_t BreakwaterMission::get_town_size() const { return mission_.town_size(); }
+
+int64_t BreakwaterMission::get_razed() const { return mission_.razed(); }
+
+int64_t BreakwaterMission::get_town_falls_after() const { return mission_.town_falls_after(); }
+
 int64_t BreakwaterMission::get_outcome() const { return static_cast<int64_t>(mission_.outcome()); }
 
 int64_t BreakwaterMission::get_elevation(int64_t x, int64_t y) const {
@@ -314,6 +320,9 @@ void BreakwaterMission::_bind_methods() {
     ClassDB::bind_method(D_METHOD("get_unit_max_hp"), &BreakwaterMission::get_unit_max_hp);
     ClassDB::bind_method(D_METHOD("get_building_max_hp"), &BreakwaterMission::get_building_max_hp);
     ClassDB::bind_method(D_METHOD("get_tide"), &BreakwaterMission::get_tide);
+    ClassDB::bind_method(D_METHOD("get_town_size"), &BreakwaterMission::get_town_size);
+    ClassDB::bind_method(D_METHOD("get_razed"), &BreakwaterMission::get_razed);
+    ClassDB::bind_method(D_METHOD("get_town_falls_after"), &BreakwaterMission::get_town_falls_after);
     ClassDB::bind_method(D_METHOD("get_outcome"), &BreakwaterMission::get_outcome);
     ClassDB::bind_method(D_METHOD("get_elevation", "x", "y"), &BreakwaterMission::get_elevation);
     ClassDB::bind_method(D_METHOD("get_building_hp", "x", "y"), &BreakwaterMission::get_building_hp);

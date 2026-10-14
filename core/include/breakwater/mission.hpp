@@ -21,11 +21,14 @@ inline constexpr int kAttackDamage = 2;
 inline constexpr int kDeployRow = 4;
 inline constexpr int kStartTide = 1;
 inline constexpr int kTurnCount = 5;
+/// The town falls when this many of its buildings are razed, or all of them
+/// if it started smaller (docs/RULES.md, "Outcome").
+inline constexpr int kTownFallsAfter = 2;
 
 enum class Outcome : std::uint8_t {
     InProgress,
     Won,  ///< The enemy phase of the last turn completed without a loss.
-    Lost, ///< Every engineer died, or every building was razed.
+    Lost, ///< Every engineer died, or the town fell (kTownFallsAfter).
 };
 
 /// Where an engineer is in its turn: it may move and then shove, and a shove
@@ -158,6 +161,13 @@ public:
     [[nodiscard]] Outcome outcome() const noexcept { return outcome_; }
     /// Precondition: `id` names a unit.
     [[nodiscard]] ActionState action_state(UnitId id) const;
+    /// Buildings the mission started with.
+    [[nodiscard]] int town_size() const noexcept { return town_size_; }
+    /// Buildings razed so far.
+    [[nodiscard]] int razed() const noexcept;
+    /// Razed buildings that lose the mission: kTownFallsAfter, or the whole
+    /// town if it is smaller. 0 for a mission without buildings.
+    [[nodiscard]] int town_falls_after() const noexcept;
     /// What crawler `id` will strike next enemy phase. Empty for engineers, the
     /// dead, and crawlers with no target. Precondition: `id` names a unit.
     [[nodiscard]] Intent intent(UnitId id) const;
@@ -181,7 +191,7 @@ public:
 
     /// FNV-1a over everything that decides the future: the board, the seed
     /// (later draws derive from it), the turn, the action states, the intents,
-    /// the spawn table and the outcome.
+    /// the spawn table, the town's starting size and the outcome.
     [[nodiscard]] std::uint64_t state_hash() const noexcept;
 
 private:
@@ -209,11 +219,13 @@ private:
     std::vector<Intent> intents_;      ///< Indexed by UnitId.
     SpawnTable spawns_ = kSpawnTable;
     Outcome outcome_ = Outcome::InProgress;
-    /// Whether the mission started with any engineer or building. Neither can
-    /// be created later, so a hand-built board without buildings cannot be
-    /// lost by razing them. Generated missions always have both.
+    /// Whether the mission started with any engineer, and with how many
+    /// buildings. Neither can be created later, so a hand-built board without
+    /// buildings cannot be lost by razing them. Generated missions always
+    /// have three engineers and three buildings. A razed building leaves no
+    /// trace on the board, so the size is part of the state hash.
     bool has_engineers_ = false;
-    bool has_town_ = false;
+    int town_size_ = 0;
     std::vector<Event> events_;
 };
 

@@ -151,7 +151,7 @@ Mission::Mission(std::uint64_t seed, Board board, Setup setup)
         has_engineers_ = has_engineers_ || board_.unit(id).kind == UnitKind::Engineer;
     }
     for (std::size_t i = 0; i < kTileCount; ++i) {
-        has_town_ = has_town_ || board_.tile(tile_coord(i)).building_hp > 0;
+        town_size_ += board_.tile(tile_coord(i)).building_hp > 0 ? 1 : 0;
     }
 }
 
@@ -190,6 +190,16 @@ Mission Mission::from_board(std::uint64_t seed, Board board, Setup setup) {
 
 ActionState Mission::action_state(UnitId id) const { return actions_.at(id); }
 
+int Mission::razed() const noexcept {
+    int standing = 0;
+    for (std::size_t i = 0; i < kTileCount; ++i) {
+        standing += board_.tile(tile_coord(i)).building_hp > 0 ? 1 : 0;
+    }
+    return town_size_ - standing;
+}
+
+int Mission::town_falls_after() const noexcept { return std::min(town_size_, kTownFallsAfter); }
+
 Intent Mission::intent(UnitId id) const { return board_.unit(id).alive() ? intents_.at(id) : std::nullopt; }
 
 std::vector<Coord> Mission::reachable(UnitId engineer) const {
@@ -219,7 +229,7 @@ std::expected<void, Rejection> Mission::apply(const Command& command) {
     if (const auto* shove = std::get_if<ShoveCommand>(&command)) {
         auto result = apply_shove(*shove);
         if (result) {
-            (void)check_loss(); // A shove can drown the last engineer or raze the last building.
+            (void)check_loss(); // A shove can drown the last engineer or bring the town down.
         }
         return result;
     }
@@ -347,11 +357,8 @@ bool Mission::check_loss() {
         const Unit& u = board_.unit(id);
         engineer_alive = engineer_alive || (u.kind == UnitKind::Engineer && u.alive());
     }
-    bool building_standing = false;
-    for (std::size_t i = 0; i < kTileCount; ++i) {
-        building_standing = building_standing || board_.tile(tile_coord(i)).building_hp > 0;
-    }
-    if ((has_engineers_ && !engineer_alive) || (has_town_ && !building_standing)) {
+    const bool town_fallen = town_size_ > 0 && razed() >= town_falls_after();
+    if ((has_engineers_ && !engineer_alive) || town_fallen) {
         end(Outcome::Lost);
         return true;
     }
@@ -486,6 +493,7 @@ std::uint64_t Mission::state_hash() const noexcept {
     for (const int count : spawns_) {
         detail::fnv_int(hash, count);
     }
+    detail::fnv_int(hash, town_size_);
     detail::fnv_bytes(hash, static_cast<std::uint64_t>(outcome_), 1);
     return hash;
 }
