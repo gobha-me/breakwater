@@ -169,3 +169,6 @@ recorded. The model, prompt, length and date identify each generation.
 
 **Licence:** generated on the owner's Venice plan and shipped under the
 repository's BSD 3-Clause licence.
+
+**Owner approval:** the owner listened to the recording with sound on
+2026-10-14: "the audio is fine, no changes needed".
