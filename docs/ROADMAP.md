@@ -26,13 +26,10 @@ Since the slice, as GitHub milestones:
 | 7 Terrain art | Textured terrain, water, toppers | v0.3.0 |
 | 8 Depth | Marching crawlers (#71), the town falls at two (#96), Rammer measured and dropped (#72), harpoon pull (#73) | v0.4.0 |
 | Engineering hygiene | Godot gates in CI, GDScript lint, leaks, crash repro (#74-#77) | n/a |
-| Later | Sound (#78, merged, awaiting the owner's listen), campaigns (#79) | v0.5.0 |
+| Later | Sound (#78, approved by the owner), campaigns (#79) | v0.5.0 |
 
-Open for the owner:
-
-- **#78:** listen to the recording with sound (`docs/captures/audio/`).
-- **#80:** publishing a build to itch.io. That is outward-facing, so it waits
-  for the owner's go.
+Open for the owner: **#80**, publishing a build to itch.io. That is
+outward-facing, so it waits for the owner's go.
 
 Revised since the plan: crawlers now go for the town, strike for 2 and move 3
 (#19, #39), and march on it rather than chase engineers (#71). The town falls
