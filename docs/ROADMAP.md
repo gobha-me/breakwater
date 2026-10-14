@@ -4,19 +4,35 @@ Phases run in order. Each ends with evidence, not a claim. The acceptance
 criteria being chased are in [the concept](CONCEPT.md); the numbers in
 parentheses say which criterion a phase closes.
 
-## Status, 2026-10-13: vertical slice complete
+## Status, 2026-10-14: slice complete, depth, sound and campaigns added
 
 | Phase | State | Concept criterion |
 |---|---|---|
 | 0 Rules | Done: `RULES.md` (#13), rebalanced in #39 | n/a |
 | 1 Core loop | Done (#15, #17, #18, #23) | 2: rules only in `core/` |
-| 2 Replay | Done (#24, #31, #32) | 3: `tools/replay_check.sh`, 12/12 identical |
+| 2 Replay | Done (#24, #31, #32) | 3: `tools/replay_check.sh`, 16/16 identical (three mission logs and a campaign, four builds) |
 | 3 Playable | Done (#35, #40, #41, #46); captures in `docs/captures/` | 1: playable by input; 6: golden gate in place |
 | 4 Solver | Done (#36, #42); proof budget 2M since #96 | 4: `tools/seeds_check.sh`, 990 proven, 10 rejected |
 | 5 Assets | Done (#49): four Meshy assets, look A, provenance in `assets/PROVENANCE.md` | 5; 6: golden re-recorded |
 
-All six concept criteria are met and gated by `tools/check.sh`. Open for the
-owner: review of the look and confirmation of the Meshy licence (#49).
+All six concept criteria are met and gated by `tools/check.sh`. The owner
+approved the look and confirmed the Meshy licence (#49).
+
+Since the slice, as GitHub milestones:
+
+| Milestone | Issues | Tag |
+|---|---|---|
+| 6 Consequences visible | Previews, undo, readable strikes, hints | v0.2.0 |
+| 7 Terrain art | Textured terrain, water, toppers | v0.3.0 |
+| 8 Depth | Marching crawlers (#71), the town falls at two (#96), Rammer measured and dropped (#72), harpoon pull (#73) | v0.4.0 |
+| Engineering hygiene | Godot gates in CI, GDScript lint, leaks, crash repro (#74-#77) | n/a |
+| Later | Sound (#78, merged, awaiting the owner's listen), campaigns (#79) | v0.5.0 |
+
+Open for the owner:
+
+- **#78:** listen to the recording with sound (`docs/captures/audio/`).
+- **#80:** publishing a build to itch.io. That is outward-facing, so it waits
+  for the owner's go.
 
 Revised since the plan: crawlers now go for the town, strike for 2 and move 3
 (#19, #39), and march on it rather than chase engineers (#71). The town falls
