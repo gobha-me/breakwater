@@ -55,6 +55,7 @@ build type.
 ```sh
 tools/check.sh   # format, ASan+UBSan, GCC, clang, clang-tidy, replay, Godot smoke
 ```
+The ASan, GCC and dev builds default to two parallel jobs; set `CMAKE_BUILD_PARALLEL_LEVEL` to override.
 
 ## License
 
