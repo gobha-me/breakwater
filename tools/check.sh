@@ -5,6 +5,7 @@ cd "$(dirname "$0")/.."
 
 gate() { printf '\n=== %s\n' "$1"; }
 
+gate "lavapipe harness"; python3 tools/test_lavapipe.py -v
 gate "format";           tools/format.sh --check
 gate "gdscript";         tools/gdlint.sh
 gate "clang ASan+UBSan"; cmake --preset asan >/dev/null && cmake --build --preset asan && ctest --preset asan
