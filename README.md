@@ -56,6 +56,20 @@ build type.
 tools/check.sh   # format, ASan+UBSan, GCC, clang, clang-tidy, replay, Godot smoke
 ```
 
+GitHub runs one light formatting, GDScript lint and workflow-policy job, with a
+10-minute timeout. Full builds, C++ lint, replays, proofs and Godot gates run
+locally through `tools/check.sh` until heavy CI is available. Main pushes and
+manual runs finish; newer PR runs cancel older PR runs.
+
+`tools/workflow_check.sh` checks all `.github/workflows/*.{yml,yaml}` and
+`.gitea/workflows/*.{yml,yaml}` files and tests unsafe inputs. It uses Python 3
+and PyYAML 6.0.3 (`uvx` supplies the pinned package when available; otherwise
+install it with `python3 -m pip install PyYAML==6.0.3`). It rejects missing
+concurrency, cancellation of main/manual runs, unbounded push triggers, extra
+GitHub jobs and excessive timeouts. Future Gitea workflows must use named
+push branches, schedule/manual triggers and the `ci-kind`, `ci-build` or
+`ci-light` runners; no Gitea heavy jobs are provisioned here.
+
 ## License
 
 BSD 3-Clause; see [LICENSE](LICENSE). This covers the code and the assets in
