@@ -5,6 +5,7 @@ cd "$(dirname "$0")/.."
 
 gate() { printf '\n=== %s\n' "$1"; }
 
+gate "build parallelism"; python3 tools/test_check_parallel.py
 gate "format";           tools/format.sh --check
 gate "gdscript";         tools/gdlint.sh
 gate "clang ASan+UBSan"; cmake --preset asan >/dev/null && cmake --build --preset asan --parallel "${CMAKE_BUILD_PARALLEL_LEVEL:-2}" && ctest --preset asan
