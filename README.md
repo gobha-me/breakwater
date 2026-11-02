@@ -56,18 +56,19 @@ build type.
 tools/check.sh   # format, ASan+UBSan, GCC, clang, clang-tidy, replay, Godot smoke
 ```
 
-For a software Vulkan baseline (Mesa lavapipe), point the Vulkan loader at
-its ICD when running the existing capture wrapper. On Ubuntu, install
-`mesa-vulkan-drivers` and `vulkan-tools`, then run:
+The golden harness pins both `VK_ICD_FILENAMES` and `VK_DRIVER_FILES` to
+`/usr/share/vulkan/icd.d/lvp_icd.json` for a software Vulkan baseline (Mesa
+lavapipe), overriding inherited loader settings. If that file is missing or
+unreadable, the harness stops before rendering and asks Infra Lead to
+reinstall `mesa-vulkan-drivers`. Infra Lead also supplies `vulkan-tools` for
+renderer diagnostics. Run:
 
 ```sh
-export VK_DRIVER_FILES=/usr/share/vulkan/icd.d/lvp_icd.json
-export VK_ICD_FILENAMES="$VK_DRIVER_FILES" # for older Vulkan loaders
 export LP_NUM_THREADS=2
 GODOT_BIN="$(tools/fetch_godot.sh)" tools/golden.sh
 ```
 
-Use the same environment for `tools/golden.sh --update` and `tools/check.sh`.
+The same pin applies to `tools/golden.sh --update` and `tools/check.sh`.
 The software adapter reports itself as `llvmpipe`; the selected lvp ICD makes
 this Vulkan (lavapipe), rather than the OpenGL llvmpipe fallback. Record
 `vulkaninfo --summary` and the adapter line in `build/golden/capture.log`

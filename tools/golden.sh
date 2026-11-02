@@ -11,6 +11,9 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+source tools/lavapipe.sh
+pin_lavapipe /usr/share/vulkan/icd.d/lvp_icd.json
+
 golden="tests/golden/opening-seed20.png"
 mkdir -p build/golden
 actual="$PWD/build/golden/opening-seed20.png"
