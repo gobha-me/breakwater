@@ -56,6 +56,24 @@ build type.
 tools/check.sh   # format, ASan+UBSan, GCC, clang, clang-tidy, replay, Godot smoke
 ```
 
+For a software Vulkan baseline (Mesa lavapipe), point the Vulkan loader at
+its ICD when running the existing capture wrapper. On Ubuntu, install
+`mesa-vulkan-drivers` and `vulkan-tools`, then run:
+
+```sh
+export VK_DRIVER_FILES=/usr/share/vulkan/icd.d/lvp_icd.json
+export VK_ICD_FILENAMES="$VK_DRIVER_FILES" # for older Vulkan loaders
+export LP_NUM_THREADS=2
+GODOT_BIN="$(tools/fetch_godot.sh)" tools/golden.sh
+```
+
+Use the same environment for `tools/golden.sh --update` and `tools/check.sh`.
+The software adapter reports itself as `llvmpipe`; the selected lvp ICD makes
+this Vulkan (lavapipe), rather than the OpenGL llvmpipe fallback. Record
+`vulkaninfo --summary` and the adapter line in `build/golden/capture.log`
+when updating the baseline. The recorded baseline uses official Godot 4.7.2,
+Mesa 25.2.8 and LLVM 20.1.2; changing those versions can change pixels.
+
 ## License
 
 BSD 3-Clause; see [LICENSE](LICENSE). This covers the code and the assets in
