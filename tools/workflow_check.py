@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Cheap, fail-closed policy checks for GitHub and future Gitea workflows.
 
-Requires PyYAML 6.0.3. BaseLoader preserves YAML's `on` key and scalar text.
+Requires PyYAML 6.0.3. Preserve scalar text except for YAML null values.
 """
 
 import argparse
+import re
 import sys
 from pathlib import Path
 
@@ -26,6 +27,16 @@ def unique_mapping(loader, node):
 
 
 UniqueLoader.add_constructor("tag:yaml.org,2002:map", unique_mapping)
+# Keep `on` and numeric timeouts as text, but never treat an absent branch
+# name as a literal string. Quoted null spellings remain valid string names.
+UniqueLoader.add_implicit_resolver(
+    "tag:yaml.org,2002:null",
+    re.compile(r"^(?:~|null|Null|NULL|)$"),
+    ["~", "n", "N", ""],
+)
+UniqueLoader.add_constructor(
+    "tag:yaml.org,2002:null", yaml.SafeLoader.construct_yaml_null
+)
 CANCEL = "${{ github.event_name == 'pull_request' }}"
 GITEA_CANCEL = "${{ gitea.event_name == 'push' && gitea.ref != 'refs/heads/main' }}"
 
