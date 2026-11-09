@@ -9,174 +9,37 @@ on:
 permissions:
   contents: read
 
-# A newer push to a PR supersedes the older run. Runs on main always finish:
-# main's compiler cache is the one every new PR restores from.
+# Superseded PR runs cancel. Main and manual runs always finish.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
-env:
-  CLANG_VERSION: "20"
-  GCC_VERSION: "14"
-
 jobs:
-  format:
-    name: clang-format and gdlint
+  light:
+    name: format, lint and workflow policy
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
 
-      - name: Install clang-format
+      - name: Install light tooling
         run: |
-          wget -qO /tmp/llvm.sh https://apt.llvm.org/llvm.sh
-          chmod +x /tmp/llvm.sh
-          sudo /tmp/llvm.sh "$CLANG_VERSION"
-          sudo apt-get install -y "clang-format-$CLANG_VERSION"
+          sudo apt-get update
+          sudo apt-get install -y clang-format-20
+          python -m pip install gdtoolkit==4.5.0 PyYAML==6.0.3
 
-      - name: Check formatting
+      - name: Check C++ formatting
         env:
           CLANG_FORMAT: clang-format-20
         run: tools/format.sh --check
 
       - name: Lint and format-check GDScript
+        run: tools/gdlint.sh
+
+      - name: Guard workflow policy and exercise rejection cases
         run: |
-          pipx install gdtoolkit==4.5.0
-          tools/gdlint.sh
-
-  sanitizers:
-    name: clang ASan+UBSan
-    runs-on: ubuntu-24.04
-    timeout-minutes: 25
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Install Clang and Ninja
-        run: |
-          wget -qO /tmp/llvm.sh https://apt.llvm.org/llvm.sh
-          chmod +x /tmp/llvm.sh
-          sudo /tmp/llvm.sh "$CLANG_VERSION"
-          sudo apt-get install -y ninja-build
-          sudo ln -sf "/usr/bin/clang++-$CLANG_VERSION" /usr/local/bin/clang++
-
-      - name: Configure
-        run: cmake --preset asan
-
-      - name: Build
-        run: cmake --build --preset asan --parallel 4
-
-      - name: Test
-        run: ctest --preset asan
-
-  gcc:
-    name: gcc
-    runs-on: ubuntu-24.04
-    timeout-minutes: 25
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Install GCC and Ninja
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y "g++-$GCC_VERSION" ninja-build
-          sudo ln -sf "/usr/bin/g++-$GCC_VERSION" /usr/local/bin/g++
-
-      - name: Configure
-        run: cmake --preset gcc
-
-      - name: Build
-        run: cmake --build --preset gcc --parallel 4
-
-      - name: Test
-        run: ctest --preset gcc
-
-  replay:
-    name: replay determinism and seed proofs
-    runs-on: ubuntu-24.04
-    timeout-minutes: 25
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Install Clang, GCC and Ninja
-        run: |
-          wget -qO /tmp/llvm.sh https://apt.llvm.org/llvm.sh
-          chmod +x /tmp/llvm.sh
-          sudo /tmp/llvm.sh "$CLANG_VERSION"
-          sudo apt-get install -y "g++-$GCC_VERSION" ninja-build
-          sudo ln -sf "/usr/bin/clang++-$CLANG_VERSION" /usr/local/bin/clang++
-          sudo ln -sf "/usr/bin/g++-$GCC_VERSION" /usr/local/bin/g++
-
-      # Builds only bw_replay in each preset, so godot-cpp is fetched by the
-      # Clang presets but never compiled here.
-      - name: Replay every committed log under Clang and GCC, debug and release
-        run: tools/replay_check.sh
-
-      - name: Prove every offered seed winnable; rejected list must match
-        run: tools/seeds_check.sh
-
-  clang:
-    name: clang, extension, clang-tidy and Godot
-    runs-on: ubuntu-24.04
-    timeout-minutes: 45
-    env:
-      # CMake reads the launcher from the environment, so the presets stay
-      # untouched and local builds work with or without ccache installed.
-      CMAKE_CXX_COMPILER_LAUNCHER: ccache
-      CCACHE_DIR: ${{ github.workspace }}/.ccache
-      CCACHE_MAXSIZE: 500M
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Install Clang tooling, Ninja and ccache
-        run: |
-          wget -qO /tmp/llvm.sh https://apt.llvm.org/llvm.sh
-          chmod +x /tmp/llvm.sh
-          sudo /tmp/llvm.sh "$CLANG_VERSION"
-          sudo apt-get install -y "clang-tidy-$CLANG_VERSION" ninja-build ccache
-          sudo ln -sf "/usr/bin/clang++-$CLANG_VERSION" /usr/local/bin/clang++
-
-      # Most of this job is godot-cpp, which only changes with its tag. ccache
-      # keys on preprocessed source and flags, so a stale restore costs a miss,
-      # never a wrong object. The key changes with the compiler and with the
-      # extension's CMakeLists.txt, which pins the godot-cpp tag; the last
-      # restore key falls back to any cache from the same compiler, so editing
-      # that file does not send a PR back to a cold build.
-      - name: Restore compiler cache
-        uses: actions/cache@v6
-        with:
-          path: .ccache
-          key: ccache-clang${{ env.CLANG_VERSION }}-${{ hashFiles('extension/CMakeLists.txt') }}-${{ github.sha }}
-          restore-keys: |
-            ccache-clang${{ env.CLANG_VERSION }}-${{ hashFiles('extension/CMakeLists.txt') }}-
-            ccache-clang${{ env.CLANG_VERSION }}-
-
-      - name: Configure
-        run: cmake --preset dev
-
-      # godot-cpp generates its bindings during the build, and clang-tidy needs
-      # those headers to analyse extension/.
-      - name: Build
-        run: cmake --build --preset dev --parallel 4
-
-      - name: Test
-        run: ctest --preset dev
-
-      - name: Compiler cache statistics
-        run: ccache --show-stats
-
-      - name: clang-tidy
-        env:
-          RUN_CLANG_TIDY: run-clang-tidy-20
-        run: tools/lint.sh
-
-      - name: Restore the official Godot binary
-        uses: actions/cache@v6
-        with:
-          path: ~/.cache/breakwater
-          key: godot-4.7.2-official-${{ hashFiles('tools/fetch_godot.sh') }}
-
-      # The bridge smoke test, autoplay of every committed log through the
-      # scene, and the injected-input test, headless on the official 4.7.2
-      # build. The golden image stays local: it needs a GPU-backed display.
-      - name: Godot gates (official 4.7.2, headless)
-        run: GODOT_BIN="$(tools/fetch_godot.sh)" tools/godot_smoke.sh
+          python3 tools/workflow_check.py
+          python3 tools/test_workflow_check.py
